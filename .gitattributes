@@ -1,0 +1,7 @@
+# Keep Unix line endings for shell scripts and container files, even when cloned on Windows
+# (CRLF breaks bash with "$'\r': command not found").
+* text=auto
+*.sh text eol=lf
+docker/Dockerfile text eol=lf
+*.ps1 text eol=crlf
+*.png binary

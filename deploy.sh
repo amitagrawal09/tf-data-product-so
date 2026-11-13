@@ -33,8 +33,19 @@ D365_CLIENT_SECRET="${D365_CLIENT_SECRET:-}"
 D365_COMPANY="${D365_COMPANY:-usmf}"
 ISA_SENDER_ID="${ISA_SENDER_ID:-TAYLORFARMS}"
 LOCAL_API_KEY="${LOCAL_API_KEY:-local-dev-key}"
-PYTHON="${PYTHON:-python3}"
+# Pick a working interpreter. On Windows `python3` is often the Microsoft Store stub, so probe each candidate.
+if [[ -z "${PYTHON:-}" ]]; then
+  for _cand in python3 python py; do
+    if command -v "$_cand" >/dev/null 2>&1 && "$_cand" -c 'import sys' >/dev/null 2>&1; then PYTHON="$_cand"; break; fi
+  done
+  PYTHON="${PYTHON:-python3}"
+fi
 VENV_DIR="${VENV_DIR:-$ROOT_DIR/.venv}"
+# Virtual environments use Scripts\python.exe on Windows (Git Bash / MSYS / Cygwin) and bin/python elsewhere.
+case "$(uname -s 2>/dev/null)" in
+  MINGW*|MSYS*|CYGWIN*) VENV_PY="$VENV_DIR/Scripts/python.exe" ;;
+  *)                    VENV_PY="$VENV_DIR/bin/python" ;;
+esac
 RUN_DIR="$ROOT_DIR/data/run"
 STATE_DIR="$ROOT_DIR/.deploy"
 ASSUME_YES="${ASSUME_YES:-false}"
@@ -105,19 +116,19 @@ ensure_python() {
 import sys
 sys.exit(0 if sys.version_info >= (3, 11) else 1)
 EOF
-  if [[ ! -x "$VENV_DIR/bin/python" ]]; then
+  if [[ ! -x "$VENV_PY" ]]; then
     step "Creating virtual environment ($VENV_DIR)"
     "$PYTHON" -m venv "$VENV_DIR"
   fi
   local stamp="$VENV_DIR/.tfso-installed"
   if [[ ! -f "$stamp" || requirements.txt -nt "$stamp" || pyproject.toml -nt "$stamp" ]]; then
     step "Installing dependencies"
-    "$VENV_DIR/bin/python" -m pip install --quiet --upgrade pip
-    "$VENV_DIR/bin/python" -m pip install --quiet -r requirements.txt
-    "$VENV_DIR/bin/python" -m pip install --quiet -e .
+    "$VENV_PY" -m pip install --quiet --upgrade pip
+    "$VENV_PY" -m pip install --quiet -r requirements.txt
+    "$VENV_PY" -m pip install --quiet -e .
     touch "$stamp"
   fi
-  ok "Python environment ready ($("$VENV_DIR/bin/python" --version))"
+  ok "Python environment ready ($("$VENV_PY" --version))"
 }
 
 run_smoke() {
@@ -128,7 +139,7 @@ run_smoke() {
     return 0
   fi
   step "Smoke test against $base"
-  local py="$VENV_DIR/bin/python"
+  local py="$VENV_PY"
   [[ -x "$py" ]] || { ensure_python; }
   "$py" -m tfso.tools.smoke --base "$base" "$@"
   ok "Smoke test passed"
@@ -172,7 +183,7 @@ local_up() {
   export TFSO_D365_MODE="${TFSO_D365_MODE:-simulator}"
   export TFSO_SIM_AUTOPROGRESS="${TFSO_SIM_AUTOPROGRESS:-false}"
   export TFSO_LAKEHOUSE_MODE=file
-  export TFSO_FRONTEND_DIR="$ROOT_DIR/frontend"
+  export TFSO_FRONTEND_DIR="./frontend"  # relative: Windows Python cannot read Git Bash /c/... paths
   export TFSO_ISA_SENDER_ID="$ISA_SENDER_ID"
 
   local entry name port
@@ -182,11 +193,11 @@ local_up() {
       die "port ${port} is already serving something; run './deploy.sh local-stop' or free the port"
     fi
     case "$name" in
-      process) export TFSO_DB_URL="sqlite:///$ROOT_DIR/data/process.db" ;;
-      system)  export TFSO_DB_URL="sqlite:///$ROOT_DIR/data/system.db" ;;
+      process) export TFSO_DB_URL="sqlite:///./data/process.db" ;;
+      system)  export TFSO_DB_URL="sqlite:///./data/system.db" ;;
       *)       unset TFSO_DB_URL ;;
     esac
-    SERVICE="$name" nohup "$VENV_DIR/bin/uvicorn" "tfso.${name}.app:app" \
+    SERVICE="$name" nohup "$VENV_PY" -m uvicorn "tfso.${name}.app:app" \
       --host 0.0.0.0 --port "$port" --proxy-headers \
       >"$RUN_DIR/${name}.log" 2>&1 &
     echo $! >"$RUN_DIR/${name}.pid"
@@ -475,8 +486,8 @@ azure_destroy() {
 run_tests() {
   ensure_python
   step "Running tests"
-  "$VENV_DIR/bin/python" -m pip install --quiet pytest >/dev/null
-  "$VENV_DIR/bin/python" -m pytest -q "$@"
+  "$VENV_PY" -m pip install --quiet pytest >/dev/null
+  "$VENV_PY" -m pytest -q "$@"
 }
 
 # =====================================================================================

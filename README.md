@@ -58,6 +58,20 @@ Provisions everything in Azure with Bicep, builds the image in ACR, rolls out Co
 
 Stops the local services.
 
+### Windows
+
+Use the PowerShell script from the repo folder. It needs Python 3.11+ from python.org, with "Add python.exe to PATH" ticked.
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+```
+
+```powershell
+.\deploy.ps1 local
+```
+
+`.\deploy.ps1 local-stop`, `test`, `smoke` and `docker` work the same way. `.\deploy.ps1 azure` hands over to `deploy.sh` through WSL or Git Bash, because the Azure flow is bash-only. `deploy.sh` itself also runs in Git Bash or WSL.
+
 Interactive API docs (OpenAPI): http://localhost:8002/docs (Process / Order Status API), `:8001/docs` (Experience) and `:8003/docs` (System).
 
 ## Try it in the console
