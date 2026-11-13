@@ -50,8 +50,48 @@ export class ApiError extends Error {
   }
 }
 
+/* ---------- API call log ----------------------------------------------------------------
+ * Every request made by the console (any page) is recorded with its full input (method, URL,
+ * headers, body) and output (status, timing, headers, body). The API explorer renders this log.
+ */
+const CALL_LOG = [];
+const LOG_LIMIT = 300;
+const listeners = new Set();
+let callSeq = 0;
+
+export function callLog() { return CALL_LOG; }
+export function onCall(fn) { listeners.add(fn); return () => listeners.delete(fn); }
+export function clearCallLog() { CALL_LOG.length = 0; listeners.forEach(fn => fn(null)); }
+
+function maskHeaders(h) {
+  const out = {};
+  for (const [k, v] of Object.entries(h || {})) {
+    out[k] = /api-key|subscription-key|authorization/i.test(k) && v ? String(v).slice(0, 4) + "••••" : v;
+  }
+  return out;
+}
+
+function record(entry) {
+  CALL_LOG.unshift(entry);
+  if (CALL_LOG.length > LOG_LIMIT) CALL_LOG.pop();
+  listeners.forEach(fn => { try { fn(entry); } catch { /* listener errors never break API calls */ } });
+}
+
+/** Render a call as a copy-paste cURL command (keys masked). */
+export function toCurl(call) {
+  const rq = call.request;
+  const abs = new URL(rq.url, location.href).href;
+  const parts = [`curl -X ${rq.method} '${abs}'`];
+  for (const [k, v] of Object.entries(rq.headers || {})) parts.push(`-H '${k}: ${v}'`);
+  if (rq.body !== undefined && rq.body !== null && rq.body !== "") {
+    const b = typeof rq.body === "string" ? rq.body : JSON.stringify(rq.body);
+    parts.push(`--data-raw '${b.replace(/'/g, "'\\''")}'`);
+  }
+  return parts.join(" \\\n  ");
+}
+
 /**
- * request("process", "/v1/orders", { query, body, headers, method, raw })
+ * request("process", "/v1/orders", { query, body, headers, method, raw, source })
  * Returns parsed JSON (or text). With raw:true returns {status, ok, headers, data, ms, correlationId}.
  */
 export async function request(layer, path, opts = {}) {
@@ -76,13 +116,21 @@ export async function request(layer, path, opts = {}) {
   if (opts.idempotent) headers["Idempotency-Key"] = uuid();
   Object.assign(headers, opts.headers || {});
 
+  const call = {
+    id: ++callSeq, at: new Date().toISOString(), layer: layer || (path.split("/")[1] || ""),
+    source: opts.source || (location.hash || "#/").replace(/^#/, ""),
+    request: { method, url, path: layer ? `/${layer}${path}` : path, headers: maskHeaders(headers), body: opts.body },
+    response: null,
+  };
   const t0 = performance.now();
   let res;
   try {
     res = await fetch(url, { method, headers, body });
   } catch (err) {
     const e = new ApiError(0, { title: "Network error", detail: `Could not reach ${url} (${err.message})` }, correlationId);
-    if (opts.raw) return { status: 0, ok: false, headers: {}, data: e.problem, ms: Math.round(performance.now() - t0), correlationId, url };
+    call.response = { status: 0, ok: false, ms: Math.round(performance.now() - t0), headers: {}, body: e.problem };
+    record(call);
+    if (opts.raw) return { status: 0, ok: false, headers: {}, data: e.problem, ms: call.response.ms, correlationId, url, call };
     throw e;
   }
   const ms = Math.round(performance.now() - t0);
@@ -95,10 +143,12 @@ export async function request(layer, path, opts = {}) {
     } else data = text;
   }
   const respCorr = res.headers.get("x-correlation-id") || correlationId;
+  const h = {};
+  res.headers.forEach((v, k) => { h[k] = v; });
+  call.response = { status: res.status, ok: res.ok, ms, headers: h, body: data, correlationId: respCorr };
+  record(call);
   if (opts.raw) {
-    const h = {};
-    res.headers.forEach((v, k) => { h[k] = v; });
-    return { status: res.status, ok: res.ok, headers: h, data, ms, correlationId: respCorr, url };
+    return { status: res.status, ok: res.ok, headers: h, data, ms, correlationId: respCorr, url, call };
   }
   if (!res.ok) throw new ApiError(res.status, typeof data === "object" ? data : { title: `HTTP ${res.status}`, detail: String(data || res.statusText) }, respCorr);
   if (opts.withHeaders) return { data, etag: res.headers.get("etag"), headers: res.headers };
