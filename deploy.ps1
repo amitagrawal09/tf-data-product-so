@@ -35,7 +35,7 @@ $Services = @(
   @{ Name = "system";     Port = 8003 },
   @{ Name = "process";    Port = 8002 },
   @{ Name = "experience"; Port = 8001 },
-  @{ Name = "gateway";    Port = 8080 }
+  @{ Name = "gateway";    Port = $(if ($env:GATEWAY_PORT) { [int]$env:GATEWAY_PORT } else { 8080 }) }
 )
 
 function Step($m) { Write-Host "`n==> $m" -ForegroundColor Cyan }
@@ -94,13 +94,44 @@ function Test-Health([int]$Port, [int]$TimeoutSec = 1) {
   } catch { return $false }
 }
 
+function Show-Log([string]$Name) {
+  foreach ($f in @("$Name.err.log", "$Name.log")) {
+    $path = Join-Path $RunDir $f
+    if ((Test-Path $path) -and (Get-Item $path).Length -gt 0) {
+      Write-Host "----- last lines of data\run\$f -----" -ForegroundColor Yellow
+      Get-Content $path -Tail 25 | ForEach-Object { Write-Host "  $_" }
+    }
+  }
+}
+
 function Wait-Health([int]$Port, [string]$Name, [int]$Seconds = 60) {
   $deadline = (Get-Date).AddSeconds($Seconds)
+  $pidFile = Join-Path $RunDir "$Name.pid"
   while ((Get-Date) -lt $deadline) {
     if (Test-Health $Port 3) { Ok "$Name healthy (http://localhost:$Port/health)"; return }
+    if (Test-Path $pidFile) {
+      $procId = [int](Get-Content $pidFile)
+      if (-not (Get-Process -Id $procId -ErrorAction SilentlyContinue)) {
+        Show-Log $Name
+        Die "$Name exited during startup (see log above)"
+      }
+    }
     Start-Sleep -Milliseconds 700
   }
-  Die "$Name did not become healthy on :$Port - see data\run\$Name.err.log"
+  Show-Log $Name
+  Die "$Name did not become healthy on :$Port (see log above)"
+}
+
+function Test-PortFree([int]$Port) {
+  # Binding is the only reliable test on Windows: ports can be in use by another program *or* reserved
+  # by Windows/Hyper-V (see: netsh interface ipv4 show excludedportrange protocol=tcp).
+  foreach ($ip in @([System.Net.IPAddress]::Loopback, [System.Net.IPAddress]::Any)) {
+    $l = $null
+    try { $l = [System.Net.Sockets.TcpListener]::new($ip, $Port); $l.Start() }
+    catch { return $false }
+    finally { if ($l) { $l.Stop() } }
+  }
+  return $true
 }
 
 function Invoke-Smoke([string]$Base) {
@@ -134,7 +165,20 @@ function Start-Local {
   New-Item -ItemType Directory -Force -Path $RunDir | Out-Null
   foreach ($s in $Services) {
     if (Test-Health $s.Port) { Die "port $($s.Port) is already serving something; run '.\deploy.ps1 local-stop' or free the port" }
+    if (-not (Test-PortFree $s.Port)) {
+      if ($s.Name -eq "gateway") {
+        $alt = (@(8081..8099) + @(18080..18099)) | Where-Object { Test-PortFree $_ } | Select-Object -First 1
+        if (-not $alt) { Die "port $($s.Port) is in use and no free fallback port was found; set `$env:GATEWAY_PORT" }
+        Warn "port $($s.Port) is in use or reserved by Windows; the gateway/console will use port $alt instead"
+        $s.Port = $alt
+      } else {
+        $owner = (Get-NetTCPConnection -LocalPort $s.Port -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1).OwningProcess
+        $hint = if ($owner) { " (in use by " + (Get-Process -Id $owner -ErrorAction SilentlyContinue).ProcessName + ", pid $owner)" } else { " (possibly reserved by Windows: netsh interface ipv4 show excludedportrange protocol=tcp)" }
+        Die "port $($s.Port) for the $($s.Name) API is not available$hint"
+      }
+    }
   }
+  $gw = ($Services | Where-Object { $_.Name -eq "gateway" }).Port
   Step "Starting services (SQLite + local HTTP bus)"
   $common = @{
     TFSO_ENV = "local"; TFSO_BUS_MODE = "http"; TFSO_AUTH_MODE = "apikey"; TFSO_API_KEYS = $ApiKey
@@ -159,10 +203,10 @@ function Start-Local {
   }
   Remove-Item env:TFSO_DB_URL -ErrorAction SilentlyContinue
   foreach ($s in $Services) { Wait-Health $s.Port $s.Name }
-  Invoke-Smoke "http://localhost:8080/api"
+  Invoke-Smoke "http://localhost:$gw/api"
   Write-Host ""
   Write-Host "Local deployment ready" -ForegroundColor Green
-  Write-Host "  Order Operations Console : http://localhost:8080/"
+  Write-Host "  Order Operations Console : http://localhost:$gw/"
   Write-Host "  Process API docs         : http://localhost:8002/docs   (Order Status API)"
   Write-Host "  Experience API docs      : http://localhost:8001/docs"
   Write-Host "  System API docs          : http://localhost:8003/docs"
@@ -183,7 +227,7 @@ switch ($Command.ToLower()) {
   "local"       { Start-Local }
   "local-stop"  { Stop-Local }
   "test"        { Ensure-Python; Step "Running tests"; & $VenvPy -m pytest -q -p no:logging @Rest; exit $LASTEXITCODE }
-  "smoke"       { Ensure-Python; $u = if ($Rest) { $Rest[0] } else { "http://localhost:8080/api" }; Invoke-Smoke $u }
+  "smoke"       { Ensure-Python; $u = if ($Rest) { $Rest[0] } else { "http://localhost:$(($Services | Where-Object { $_.Name -eq 'gateway' }).Port)/api" }; Invoke-Smoke $u }
   "docker"      {
     if (-not (Get-Command docker -ErrorAction SilentlyContinue)) { Die "Docker Desktop is required for this mode" }
     Step "docker compose up"; docker compose up -d --build; if ($LASTEXITCODE -ne 0) { Die "docker compose failed" }

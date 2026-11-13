@@ -6,6 +6,7 @@ Like the APIM policy it stamps x-correlation-id and injects the backend x-api-ke
 from __future__ import annotations
 
 import os
+from contextlib import asynccontextmanager
 import uuid
 from pathlib import Path
 
@@ -26,7 +27,12 @@ def create_gateway_app() -> FastAPI:
     backends = {"exp": settings.experience_url, "process": settings.process_url, "system": settings.system_url}
     frontend = Path(os.getenv("TFSO_FRONTEND_DIR", Path(__file__).resolve().parents[3] / "frontend"))
     client = httpx.AsyncClient(timeout=60)
-    app = FastAPI(title="Sales Order - local API gateway", docs_url=None, redoc_url=None)
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI):
+        yield
+        await client.aclose()
+
+    app = FastAPI(title="Sales Order - local API gateway", docs_url=None, redoc_url=None, lifespan=lifespan)
     app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"],
                        expose_headers=["x-correlation-id", "etag", "location"])
 
@@ -62,10 +68,6 @@ def create_gateway_app() -> FastAPI:
             if path and target.is_file() and frontend.resolve() in target.parents:
                 return FileResponse(target)
             return FileResponse(frontend / "index.html")
-
-    @app.on_event("shutdown")
-    async def _close():
-        await client.aclose()
 
     return app
 
