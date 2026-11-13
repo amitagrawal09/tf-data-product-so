@@ -1,0 +1,19 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "prefix": { "value": "tfso" },
+    "environment": { "value": "dev" },
+    "containerImageRepo": { "value": "tfso-sales-order" },
+    "imageTag": { "value": "latest" },
+    "usePlaceholderImage": { "value": false },
+    "postgresAdminLogin": { "value": "tfsoadmin" },
+    "apimSku": { "value": "Developer" },
+    "apimPublisherEmail": { "value": "sales-order-product-owner@example.com" },
+    "d365Url": { "value": "" },
+    "d365TenantId": { "value": "" },
+    "d365ClientId": { "value": "" },
+    "d365Company": { "value": "usmf" },
+    "isaSenderId": { "value": "TAYLORFARMS" }
+  }
+}

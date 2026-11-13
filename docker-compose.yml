@@ -1,0 +1,98 @@
+# Local container topology that mirrors the Azure deployment:
+#   gateway (APIM stand-in + console)  ->  experience / process / system  ->  postgres
+# Messaging uses the HTTP bus locally (Service Bus in Azure).
+name: tfso-sales-order
+
+x-service-env: &service-env
+  TFSO_ENV: docker
+  TFSO_BUS_MODE: http
+  TFSO_PROCESS_URL: http://process:8000
+  TFSO_SYSTEM_URL: http://system:8000
+  TFSO_EXPERIENCE_URL: http://experience:8000
+  TFSO_AUTH_MODE: apikey
+  TFSO_API_KEYS: ${TFSO_API_KEYS:-local-dev-key}
+  TFSO_D365_MODE: simulator
+  TFSO_SIM_AUTOPROGRESS: ${TFSO_SIM_AUTOPROGRESS:-false}
+  TFSO_SIM_STEP_SECONDS: ${TFSO_SIM_STEP_SECONDS:-5}
+  TFSO_LAKEHOUSE_MODE: file
+  TFSO_ISA_SENDER_ID: TAYLORFARMS
+  PORT: "8000"
+
+x-service: &service
+  build:
+    context: .
+    dockerfile: docker/Dockerfile
+  image: tfso-sales-order:local
+  restart: unless-stopped
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: tfso
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tfso-local-pw}
+      POSTGRES_DB: postgres
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./docker/postgres/init-databases.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tfso -d postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    ports:
+      - "5432:5432"
+
+  system:
+    <<: *service
+    environment:
+      <<: *service-env
+      SERVICE: system
+      TFSO_DB_URL: postgresql+psycopg://tfso:${POSTGRES_PASSWORD:-tfso-local-pw}@postgres:5432/tfso_system
+    volumes:
+      - lakehouse:/app/data/lakehouse
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8003:8000"
+
+  process:
+    <<: *service
+    environment:
+      <<: *service-env
+      SERVICE: process
+      TFSO_DB_URL: postgresql+psycopg://tfso:${POSTGRES_PASSWORD:-tfso-local-pw}@postgres:5432/tfso_process
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8002:8000"
+
+  experience:
+    <<: *service
+    environment:
+      <<: *service-env
+      SERVICE: experience
+    depends_on:
+      - process
+      - system
+    ports:
+      - "8001:8000"
+
+  gateway:
+    <<: *service
+    environment:
+      <<: *service-env
+      SERVICE: gateway
+      TFSO_FRONTEND_DIR: /app/frontend
+    depends_on:
+      - experience
+      - process
+      - system
+    ports:
+      - "8080:8000"
+
+volumes:
+  pgdata:
+  lakehouse:

@@ -1,0 +1,452 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.taylorfarms.example/sales-order/order-group.v1.json",
+  "title": "Order group lifecycle",
+  "x-cdm-version": "1.0.0",
+  "$defs": {
+    "Actor": {
+      "properties": {
+        "type": {
+          "$ref": "#/$defs/ActorType",
+          "default": "SYSTEM"
+        },
+        "id": {
+          "description": "User principal, service name or trading-partner id",
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Name"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "title": "Actor",
+      "type": "object"
+    },
+    "ActorType": {
+      "enum": [
+        "SYSTEM",
+        "USER",
+        "CUSTOMER",
+        "PARTNER"
+      ],
+      "title": "ActorType",
+      "type": "string"
+    },
+    "HistoryEventType": {
+      "enum": [
+        "ORDER_RECEIVED",
+        "ORDER_INGESTED",
+        "VALIDATION_PASSED",
+        "VALIDATION_FAILED",
+        "ORDER_ENRICHED",
+        "ORDER_PUBLISHED",
+        "ORDER_CORRECTED",
+        "ORDER_RESUBMITTED",
+        "SUBMITTED_TO_ERP",
+        "ERP_ACCEPTED",
+        "ERP_REJECTED",
+        "CREDIT_HOLD_PLACED",
+        "HOLD_PLACED",
+        "HOLD_RELEASED",
+        "INVENTORY_RESERVED",
+        "LINE_BACKORDERED",
+        "RELEASED_TO_WAREHOUSE",
+        "PICKED",
+        "PACKED",
+        "SHIPPED",
+        "DELIVERED",
+        "INVOICED",
+        "CLOSED",
+        "CANCELLED",
+        "REJECTED",
+        "DOCUMENT_SENT",
+        "NOTIFICATION_SENT",
+        "LATE_EVENT_IGNORED",
+        "ORDER_SPLIT",
+        "ORDER_LINKED"
+      ],
+      "title": "HistoryEventType",
+      "type": "string"
+    },
+    "LineChange": {
+      "properties": {
+        "lineNumber": {
+          "title": "Linenumber",
+          "type": "integer"
+        },
+        "field": {
+          "title": "Field",
+          "type": "string"
+        },
+        "fromValue": {
+          "default": null,
+          "title": "Fromvalue"
+        },
+        "toValue": {
+          "default": null,
+          "title": "Tovalue"
+        }
+      },
+      "required": [
+        "lineNumber",
+        "field"
+      ],
+      "title": "LineChange",
+      "type": "object"
+    },
+    "OrderHistoryEntry": {
+      "description": "One immutable entry in the lifecycle of an order (append-only, ordered by `sequence`).",
+      "properties": {
+        "eventId": {
+          "title": "Eventid",
+          "type": "string"
+        },
+        "orderId": {
+          "title": "Orderid",
+          "type": "string"
+        },
+        "orderGroupId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ordergroupid"
+        },
+        "sequence": {
+          "description": "Monotonic per order",
+          "minimum": 1,
+          "title": "Sequence",
+          "type": "integer"
+        },
+        "eventType": {
+          "$ref": "#/$defs/HistoryEventType"
+        },
+        "occurredAt": {
+          "description": "When it happened in the source system",
+          "format": "date-time",
+          "title": "Occurredat",
+          "type": "string"
+        },
+        "recordedAt": {
+          "description": "When the data product recorded it",
+          "format": "date-time",
+          "title": "Recordedat",
+          "type": "string"
+        },
+        "fromStatus": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/OrderStatus"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "toStatus": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/OrderStatus"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "statusCategory": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StatusCategory"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "tier": {
+          "$ref": "#/$defs/Tier",
+          "default": "TIER2"
+        },
+        "sourceSystem": {
+          "description": "EDI-GATEWAY, EMAIL, PORTAL, PROCESS-API, D365, WMS, TMS, CRM ...",
+          "title": "Sourcesystem",
+          "type": "string"
+        },
+        "actor": {
+          "$ref": "#/$defs/Actor"
+        },
+        "correlationId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Correlationid"
+        },
+        "causationId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Event or command that caused this entry",
+          "title": "Causationid"
+        },
+        "externalEventId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Idempotency key from the source system",
+          "title": "Externaleventid"
+        },
+        "reasonCode": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reasoncode"
+        },
+        "message": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Message"
+        },
+        "lineChanges": {
+          "items": {
+            "$ref": "#/$defs/LineChange"
+          },
+          "title": "Linechanges",
+          "type": "array"
+        },
+        "changes": {
+          "description": "JSON-Patch style diff of the canonical order",
+          "items": {
+            "$ref": "#/$defs/PatchOperation"
+          },
+          "title": "Changes",
+          "type": "array"
+        },
+        "documentRef": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Documentref"
+        },
+        "elapsedSincePreviousSeconds": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Elapsedsincepreviousseconds"
+        }
+      },
+      "required": [
+        "eventId",
+        "orderId",
+        "sequence",
+        "eventType",
+        "occurredAt",
+        "recordedAt",
+        "sourceSystem",
+        "actor"
+      ],
+      "title": "OrderHistoryEntry",
+      "type": "object"
+    },
+    "OrderStatus": {
+      "enum": [
+        "RECEIVED",
+        "INGESTED",
+        "EXCEPTION",
+        "VALIDATED",
+        "ENRICHED",
+        "PUBLISHED",
+        "SUBMITTED_TO_ERP",
+        "ERP_REJECTED",
+        "CREDIT_HOLD",
+        "ACCEPTED",
+        "ON_HOLD",
+        "RELEASED",
+        "PICKED",
+        "PACKED",
+        "PARTIALLY_SHIPPED",
+        "SHIPPED",
+        "DELIVERED",
+        "INVOICED",
+        "CLOSED",
+        "CANCELLED",
+        "REJECTED"
+      ],
+      "title": "OrderStatus",
+      "type": "string"
+    },
+    "PatchOperation": {
+      "properties": {
+        "op": {
+          "enum": [
+            "add",
+            "remove",
+            "replace"
+          ],
+          "title": "Op",
+          "type": "string"
+        },
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "value": {
+          "default": null,
+          "title": "Value"
+        },
+        "fromValue": {
+          "default": null,
+          "title": "Fromvalue"
+        }
+      },
+      "required": [
+        "op",
+        "path"
+      ],
+      "title": "PatchOperation",
+      "type": "object"
+    },
+    "StatusCategory": {
+      "enum": [
+        "RECEIVED",
+        "ACTION_REQUIRED",
+        "CONFIRMED",
+        "IN_FULFILLMENT",
+        "SHIPPED",
+        "DELIVERED",
+        "INVOICED",
+        "CLOSED",
+        "CANCELLED"
+      ],
+      "title": "StatusCategory",
+      "type": "string"
+    },
+    "Tier": {
+      "enum": [
+        "TIER1",
+        "TIER2",
+        "TIER3"
+      ],
+      "title": "Tier",
+      "type": "string"
+    }
+  },
+  "description": "Lifecycle across orders that belong together (multi-ST interchange, split, backorder, replacement).",
+  "properties": {
+    "orderGroupId": {
+      "title": "Ordergroupid",
+      "type": "string"
+    },
+    "origin": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "e.g. ISA13 control number or email Message-ID",
+      "title": "Origin"
+    },
+    "orderIds": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Orderids",
+      "type": "array"
+    },
+    "aggregateStatusCategory": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/StatusCategory"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "createdAt": {
+      "format": "date-time",
+      "title": "Createdat",
+      "type": "string"
+    },
+    "history": {
+      "items": {
+        "$ref": "#/$defs/OrderHistoryEntry"
+      },
+      "title": "History",
+      "type": "array"
+    }
+  },
+  "required": [
+    "orderGroupId",
+    "orderIds",
+    "createdAt"
+  ],
+  "type": "object"
+}

@@ -1,0 +1,245 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.taylorfarms.example/sales-order/order-status-changed.v1.json",
+  "title": "OrderStatusChanged event data (sales-order-events)",
+  "x-cdm-version": "1.0.0",
+  "$defs": {
+    "HistoryEventType": {
+      "enum": [
+        "ORDER_RECEIVED",
+        "ORDER_INGESTED",
+        "VALIDATION_PASSED",
+        "VALIDATION_FAILED",
+        "ORDER_ENRICHED",
+        "ORDER_PUBLISHED",
+        "ORDER_CORRECTED",
+        "ORDER_RESUBMITTED",
+        "SUBMITTED_TO_ERP",
+        "ERP_ACCEPTED",
+        "ERP_REJECTED",
+        "CREDIT_HOLD_PLACED",
+        "HOLD_PLACED",
+        "HOLD_RELEASED",
+        "INVENTORY_RESERVED",
+        "LINE_BACKORDERED",
+        "RELEASED_TO_WAREHOUSE",
+        "PICKED",
+        "PACKED",
+        "SHIPPED",
+        "DELIVERED",
+        "INVOICED",
+        "CLOSED",
+        "CANCELLED",
+        "REJECTED",
+        "DOCUMENT_SENT",
+        "NOTIFICATION_SENT",
+        "LATE_EVENT_IGNORED",
+        "ORDER_SPLIT",
+        "ORDER_LINKED"
+      ],
+      "title": "HistoryEventType",
+      "type": "string"
+    },
+    "OrderStatus": {
+      "enum": [
+        "RECEIVED",
+        "INGESTED",
+        "EXCEPTION",
+        "VALIDATED",
+        "ENRICHED",
+        "PUBLISHED",
+        "SUBMITTED_TO_ERP",
+        "ERP_REJECTED",
+        "CREDIT_HOLD",
+        "ACCEPTED",
+        "ON_HOLD",
+        "RELEASED",
+        "PICKED",
+        "PACKED",
+        "PARTIALLY_SHIPPED",
+        "SHIPPED",
+        "DELIVERED",
+        "INVOICED",
+        "CLOSED",
+        "CANCELLED",
+        "REJECTED"
+      ],
+      "title": "OrderStatus",
+      "type": "string"
+    },
+    "SourceChannel": {
+      "enum": [
+        "EDI",
+        "EMAIL",
+        "PORTAL",
+        "MANUAL",
+        "PARTNER_API"
+      ],
+      "title": "SourceChannel",
+      "type": "string"
+    },
+    "StatusCategory": {
+      "enum": [
+        "RECEIVED",
+        "ACTION_REQUIRED",
+        "CONFIRMED",
+        "IN_FULFILLMENT",
+        "SHIPPED",
+        "DELIVERED",
+        "INVOICED",
+        "CLOSED",
+        "CANCELLED"
+      ],
+      "title": "StatusCategory",
+      "type": "string"
+    }
+  },
+  "description": "`data` payload of the sales-order-events CloudEvent (output port: order status events).",
+  "properties": {
+    "orderId": {
+      "title": "Orderid",
+      "type": "string"
+    },
+    "orderGroupId": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Ordergroupid"
+    },
+    "sequence": {
+      "title": "Sequence",
+      "type": "integer"
+    },
+    "eventType": {
+      "$ref": "#/$defs/HistoryEventType"
+    },
+    "fromStatus": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/OrderStatus"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "toStatus": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/OrderStatus"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "statusCategory": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/StatusCategory"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "occurredAt": {
+      "format": "date-time",
+      "title": "Occurredat",
+      "type": "string"
+    },
+    "sourceChannel": {
+      "$ref": "#/$defs/SourceChannel"
+    },
+    "customerId": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Customerid"
+    },
+    "customerPo": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Customerpo"
+    },
+    "erpSalesOrderId": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Erpsalesorderid"
+    },
+    "totalAmount": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Totalamount"
+    },
+    "currency": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Currency"
+    },
+    "roi": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Roi"
+    }
+  },
+  "required": [
+    "orderId",
+    "sequence",
+    "eventType",
+    "occurredAt",
+    "sourceChannel"
+  ],
+  "type": "object"
+}

@@ -1,0 +1,769 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.taylorfarms.example/sales-order/status-event.v1.json",
+  "title": "Inbound status event from Tier-3 systems",
+  "x-cdm-version": "1.0.0",
+  "$defs": {
+    "ErpReference": {
+      "properties": {
+        "system": {
+          "default": "D365FO",
+          "title": "System",
+          "type": "string"
+        },
+        "company": {
+          "description": "D365 legal entity (dataAreaId)",
+          "title": "Company",
+          "type": "string"
+        },
+        "salesOrderId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "D365 SalesOrderNumber",
+          "title": "Salesorderid"
+        },
+        "salesOrderStatus": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "D365 SalesStatus: Backorder, Delivered, Invoiced, Canceled",
+          "title": "Salesorderstatus"
+        },
+        "customerAccount": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "OrderingCustomerAccountNumber",
+          "title": "Customeraccount"
+        },
+        "invoiceAccount": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "InvoiceCustomerAccountNumber",
+          "title": "Invoiceaccount"
+        },
+        "siteId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Siteid"
+        },
+        "warehouseId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Warehouseid"
+        },
+        "deliveryMode": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Deliverymode"
+        },
+        "createdAt": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Createdat"
+        },
+        "lastSyncedAt": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Lastsyncedat"
+        },
+        "rejectionReason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rejectionreason"
+        }
+      },
+      "required": [
+        "company"
+      ],
+      "title": "ErpReference",
+      "type": "object"
+    },
+    "Invoice": {
+      "properties": {
+        "invoiceId": {
+          "title": "Invoiceid",
+          "type": "string"
+        },
+        "invoiceDate": {
+          "format": "date",
+          "title": "Invoicedate",
+          "type": "string"
+        },
+        "dueDate": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Duedate"
+        },
+        "amount": {
+          "title": "Amount",
+          "type": "string"
+        },
+        "taxAmount": {
+          "default": "0",
+          "title": "Taxamount",
+          "type": "string"
+        },
+        "currency": {
+          "default": "USD",
+          "title": "Currency",
+          "type": "string"
+        },
+        "status": {
+          "default": "POSTED",
+          "enum": [
+            "POSTED",
+            "SENT",
+            "PAID",
+            "CREDITED"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "lines": {
+          "items": {
+            "$ref": "#/$defs/InvoiceLine"
+          },
+          "title": "Lines",
+          "type": "array"
+        }
+      },
+      "required": [
+        "invoiceId",
+        "invoiceDate",
+        "amount"
+      ],
+      "title": "Invoice",
+      "type": "object"
+    },
+    "InvoiceLine": {
+      "properties": {
+        "lineNumber": {
+          "title": "Linenumber",
+          "type": "integer"
+        },
+        "quantity": {
+          "title": "Quantity",
+          "type": "string"
+        },
+        "unitPrice": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Unitprice"
+        },
+        "amount": {
+          "title": "Amount",
+          "type": "string"
+        }
+      },
+      "required": [
+        "lineNumber",
+        "quantity",
+        "amount"
+      ],
+      "title": "InvoiceLine",
+      "type": "object"
+    },
+    "LotAllocation": {
+      "properties": {
+        "lotNumber": {
+          "title": "Lotnumber",
+          "type": "string"
+        },
+        "quantity": {
+          "title": "Quantity",
+          "type": "string"
+        },
+        "traceabilityLotCode": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "FSMA 204 Traceability Lot Code (TLC)",
+          "title": "Traceabilitylotcode"
+        },
+        "packDate": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Packdate"
+        },
+        "harvestDate": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Harvestdate"
+        },
+        "bestByDate": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Bestbydate"
+        },
+        "countryOfOrigin": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Countryoforigin"
+        }
+      },
+      "required": [
+        "lotNumber",
+        "quantity"
+      ],
+      "title": "LotAllocation",
+      "type": "object"
+    },
+    "ProofOfDelivery": {
+      "properties": {
+        "receivedBy": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Receivedby"
+        },
+        "receivedAt": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Receivedat"
+        },
+        "exceptions": {
+          "description": "OS&D: over, short, damaged, temperature",
+          "items": {
+            "type": "string"
+          },
+          "title": "Exceptions",
+          "type": "array"
+        }
+      },
+      "title": "ProofOfDelivery",
+      "type": "object"
+    },
+    "Shipment": {
+      "properties": {
+        "shipmentId": {
+          "title": "Shipmentid",
+          "type": "string"
+        },
+        "asnNumber": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "856 BSN02 shipment identification",
+          "title": "Asnnumber"
+        },
+        "erpPackingSlipId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Erppackingslipid"
+        },
+        "carrierScac": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Carrierscac"
+        },
+        "carrierName": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Carriername"
+        },
+        "trackingNumber": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Trackingnumber"
+        },
+        "billOfLading": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Billoflading"
+        },
+        "proNumber": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pronumber"
+        },
+        "trailerNumber": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Trailernumber"
+        },
+        "sealNumber": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sealnumber"
+        },
+        "shipFromWarehouse": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Shipfromwarehouse"
+        },
+        "shippedAt": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Shippedat"
+        },
+        "estimatedDeliveryAt": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Estimateddeliveryat"
+        },
+        "deliveredAt": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Deliveredat"
+        },
+        "status": {
+          "default": "IN_TRANSIT",
+          "enum": [
+            "PLANNED",
+            "IN_TRANSIT",
+            "DELIVERED",
+            "EXCEPTION"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "sscc": {
+          "description": "GS1 SSCC pallet labels",
+          "items": {
+            "type": "string"
+          },
+          "title": "Sscc",
+          "type": "array"
+        },
+        "temperatureLogRef": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Temperaturelogref"
+        },
+        "proofOfDelivery": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ProofOfDelivery"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "lines": {
+          "items": {
+            "$ref": "#/$defs/ShipmentLine"
+          },
+          "title": "Lines",
+          "type": "array"
+        }
+      },
+      "required": [
+        "shipmentId"
+      ],
+      "title": "Shipment",
+      "type": "object"
+    },
+    "ShipmentLine": {
+      "properties": {
+        "lineNumber": {
+          "title": "Linenumber",
+          "type": "integer"
+        },
+        "itemNumber": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Itemnumber"
+        },
+        "quantity": {
+          "title": "Quantity",
+          "type": "string"
+        },
+        "uom": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Uom"
+        },
+        "lots": {
+          "items": {
+            "$ref": "#/$defs/LotAllocation"
+          },
+          "title": "Lots",
+          "type": "array"
+        }
+      },
+      "required": [
+        "lineNumber",
+        "quantity"
+      ],
+      "title": "ShipmentLine",
+      "type": "object"
+    }
+  },
+  "description": "Inbound status event from a Tier-3 system (system-status-events topic / POST /v1/events).",
+  "properties": {
+    "eventId": {
+      "title": "Eventid",
+      "type": "string"
+    },
+    "eventType": {
+      "description": "ERP_ACCEPTED, ERP_REJECTED, CREDIT_HOLD_PLACED, RELEASED_TO_WAREHOUSE, PICKED, PACKED, SHIPPED, DELIVERED, INVOICED, CLOSED, CANCELLED",
+      "title": "Eventtype",
+      "type": "string"
+    },
+    "orderId": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Orderid"
+    },
+    "erpSalesOrderId": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Erpsalesorderid"
+    },
+    "occurredAt": {
+      "format": "date-time",
+      "title": "Occurredat",
+      "type": "string"
+    },
+    "sourceSystem": {
+      "title": "Sourcesystem",
+      "type": "string"
+    },
+    "reason": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Reason"
+    },
+    "erp": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ErpReference"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "lines": {
+      "description": "[{lineNumber, quantity, status, confirmedQuantity, backorderedQuantity, erpLineId, lots[]}]",
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "Lines",
+      "type": "array"
+    },
+    "shipment": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Shipment"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "invoice": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Invoice"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "promisedShipDate": {
+      "anyOf": [
+        {
+          "format": "date",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Promisedshipdate"
+    },
+    "payload": {
+      "additionalProperties": true,
+      "title": "Payload",
+      "type": "object"
+    }
+  },
+  "required": [
+    "eventId",
+    "eventType",
+    "occurredAt",
+    "sourceSystem"
+  ],
+  "type": "object"
+}

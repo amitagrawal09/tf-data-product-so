@@ -1,0 +1,16 @@
+.git
+.venv
+venv
+data
+.deploy
+**/__pycache__
+**/*.pyc
+**/*.db
+.pytest_cache
+node_modules
+docs
+infra
+databricks
+tests
+*.md
+!README.md

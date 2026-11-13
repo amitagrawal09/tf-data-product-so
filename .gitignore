@@ -1,0 +1,24 @@
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Runtime data (local SQLite, lakehouse files, pids, logs)
+data/
+*.db
+
+# Deployment state (generated secrets per environment) – never commit
+.deploy/
+
+# Node / tooling
+node_modules/
+infra/**/*.json.bak
+infra/main.json
+.DS_Store

@@ -1,0 +1,768 @@
+{
+  "customers": [
+    {
+      "customerId": "C-1001",
+      "name": "FreshMart Grocery",
+      "active": true,
+      "erpAccount": "US-1001",
+      "invoiceAccount": "US-1001",
+      "segment": "RETAIL",
+      "channels": [
+        "EDI"
+      ],
+      "currency": "USD",
+      "paymentTerms": {
+        "code": "Net30",
+        "description": "Net 30 days",
+        "netDays": 30
+      },
+      "priceGroup": "RETAIL-A",
+      "creditLimit": 250000,
+      "openAr": 42000,
+      "duns": "123456789",
+      "gln": "0614141000005",
+      "salesResponsible": "Jordan Lee",
+      "contacts": [
+        {
+          "role": "BD",
+          "name": "Pat Rivera",
+          "email": "orders@freshmart.example",
+          "phone": "555-0101"
+        }
+      ]
+    },
+    {
+      "customerId": "C-1002",
+      "name": "Sunrise Foodservice Distributors",
+      "active": true,
+      "erpAccount": "US-1002",
+      "invoiceAccount": "US-1002",
+      "segment": "FOODSERVICE",
+      "channels": [
+        "EDI",
+        "PARTNER_API"
+      ],
+      "currency": "USD",
+      "paymentTerms": {
+        "code": "Net21",
+        "description": "Net 21 days",
+        "netDays": 21
+      },
+      "priceGroup": "FS-B",
+      "creditLimit": 400000,
+      "openAr": 120000,
+      "duns": "987654321",
+      "gln": "0614141000104",
+      "salesResponsible": "Morgan Chu",
+      "contacts": [
+        {
+          "role": "BD",
+          "name": "Sam Ortiz",
+          "email": "purchasing@sunrisefs.example",
+          "phone": "555-0202"
+        }
+      ]
+    },
+    {
+      "customerId": "C-1003",
+      "name": "Greenleaf Cafe Group",
+      "active": true,
+      "erpAccount": "US-1003",
+      "invoiceAccount": "US-1003",
+      "segment": "QSR",
+      "channels": [
+        "PORTAL",
+        "EMAIL",
+        "MANUAL"
+      ],
+      "currency": "USD",
+      "paymentTerms": {
+        "code": "Net15",
+        "description": "Net 15 days",
+        "netDays": 15
+      },
+      "priceGroup": "LIST",
+      "creditLimit": 6000,
+      "openAr": 1500,
+      "salesResponsible": "Jordan Lee",
+      "contacts": [
+        {
+          "role": "OC",
+          "name": "Alex Kim",
+          "email": "kitchen@greenleafcafe.example",
+          "phone": "555-0303"
+        }
+      ]
+    },
+    {
+      "customerId": "C-1004",
+      "name": "Harbor Market",
+      "active": false,
+      "erpAccount": "US-1004",
+      "invoiceAccount": "US-1004",
+      "segment": "RETAIL",
+      "channels": [
+        "PORTAL"
+      ],
+      "currency": "USD",
+      "paymentTerms": {
+        "code": "Net30",
+        "netDays": 30
+      },
+      "priceGroup": "LIST",
+      "creditLimit": 0,
+      "openAr": 0,
+      "blockedReason": "Account closed"
+    },
+    {
+      "customerId": "C-1005",
+      "name": "Bayside Meal Kits",
+      "active": true,
+      "erpAccount": "US-1005",
+      "invoiceAccount": "US-1005",
+      "segment": "MEAL_KIT",
+      "channels": [
+        "PARTNER_API",
+        "PORTAL"
+      ],
+      "currency": "USD",
+      "paymentTerms": {
+        "code": "Net30",
+        "netDays": 30
+      },
+      "priceGroup": "LIST",
+      "creditLimit": 150000,
+      "openAr": 30000,
+      "partnerClientId": "bayside-partner",
+      "contacts": [
+        {
+          "role": "OC",
+          "name": "Riley Patel",
+          "email": "supply@bayside.example",
+          "phone": "555-0505"
+        }
+      ]
+    }
+  ],
+  "shipTos": [
+    {
+      "shipToId": "ST-1001-01",
+      "customerId": "C-1001",
+      "name": "FreshMart DC 12",
+      "active": true,
+      "erpLocationId": "000012001",
+      "ediLocationCode": "FM-DC12",
+      "gln": "0614141000012",
+      "address": {
+        "line1": "1200 Distribution Way",
+        "city": "Stockton",
+        "stateProvince": "CA",
+        "postalCode": "95206",
+        "country": "US"
+      },
+      "transitDays": 1,
+      "deliveryDays": [
+        "MON",
+        "TUE",
+        "WED",
+        "THU",
+        "FRI",
+        "SAT"
+      ],
+      "receivingHours": "04:00-14:00",
+      "site": "SALINAS",
+      "warehouse": "WH-SAL",
+      "deliveryMode": "TRUCK-REEFER",
+      "temperatureZone": "REFRIGERATED",
+      "appointmentRequired": true
+    },
+    {
+      "shipToId": "ST-1001-02",
+      "customerId": "C-1001",
+      "name": "FreshMart DC 31",
+      "active": true,
+      "erpLocationId": "000012002",
+      "ediLocationCode": "FM-DC31",
+      "gln": "0614141000029",
+      "address": {
+        "line1": "31 Commerce Pkwy",
+        "city": "Reno",
+        "stateProvince": "NV",
+        "postalCode": "89502",
+        "country": "US"
+      },
+      "transitDays": 2,
+      "deliveryDays": [
+        "MON",
+        "WED",
+        "FRI"
+      ],
+      "receivingHours": "05:00-13:00",
+      "site": "SALINAS",
+      "warehouse": "WH-SAL",
+      "deliveryMode": "TRUCK-REEFER",
+      "temperatureZone": "REFRIGERATED",
+      "appointmentRequired": true
+    },
+    {
+      "shipToId": "ST-1002-01",
+      "customerId": "C-1002",
+      "name": "Sunrise Fresno DC",
+      "active": true,
+      "erpLocationId": "000013001",
+      "ediLocationCode": "SF-FRE",
+      "gln": "0614141000111",
+      "address": {
+        "line1": "880 Packer Rd",
+        "city": "Fresno",
+        "stateProvince": "CA",
+        "postalCode": "93725",
+        "country": "US"
+      },
+      "transitDays": 1,
+      "deliveryDays": [
+        "MON",
+        "TUE",
+        "WED",
+        "THU",
+        "FRI"
+      ],
+      "receivingHours": "03:00-12:00",
+      "site": "SALINAS",
+      "warehouse": "WH-SAL",
+      "deliveryMode": "TRUCK-REEFER",
+      "temperatureZone": "REFRIGERATED",
+      "appointmentRequired": false
+    },
+    {
+      "shipToId": "ST-1002-02",
+      "customerId": "C-1002",
+      "name": "Sunrise Phoenix DC",
+      "active": false,
+      "erpLocationId": "000013002",
+      "ediLocationCode": "SF-PHX",
+      "address": {
+        "line1": "45 Desert Ln",
+        "city": "Phoenix",
+        "stateProvince": "AZ",
+        "postalCode": "85043",
+        "country": "US"
+      },
+      "transitDays": 2,
+      "deliveryDays": [
+        "TUE",
+        "THU"
+      ],
+      "site": "TRACY",
+      "warehouse": "WH-TRC",
+      "deliveryMode": "TRUCK-REEFER",
+      "temperatureZone": "REFRIGERATED"
+    },
+    {
+      "shipToId": "ST-1003-01",
+      "customerId": "C-1003",
+      "name": "Greenleaf Central Kitchen",
+      "active": true,
+      "erpLocationId": "000014001",
+      "address": {
+        "line1": "77 Market St",
+        "city": "San Jose",
+        "stateProvince": "CA",
+        "postalCode": "95113",
+        "country": "US"
+      },
+      "transitDays": 1,
+      "deliveryDays": [
+        "MON",
+        "TUE",
+        "WED",
+        "THU",
+        "FRI"
+      ],
+      "receivingHours": "06:00-11:00",
+      "site": "SALINAS",
+      "warehouse": "WH-SAL",
+      "deliveryMode": "TRUCK-REEFER",
+      "temperatureZone": "REFRIGERATED"
+    },
+    {
+      "shipToId": "ST-1003-02",
+      "customerId": "C-1003",
+      "name": "Greenleaf Downtown",
+      "active": true,
+      "erpLocationId": "000014002",
+      "address": {
+        "line1": "15 Mission St",
+        "city": "San Francisco",
+        "stateProvince": "CA",
+        "postalCode": "94105",
+        "country": "US"
+      },
+      "transitDays": 1,
+      "deliveryDays": [
+        "MON",
+        "WED",
+        "FRI"
+      ],
+      "receivingHours": "07:00-10:00",
+      "site": "SALINAS",
+      "warehouse": "WH-SAL",
+      "deliveryMode": "VAN-REEFER",
+      "temperatureZone": "REFRIGERATED"
+    },
+    {
+      "shipToId": "ST-1005-01",
+      "customerId": "C-1005",
+      "name": "Bayside Fulfillment Center",
+      "active": true,
+      "erpLocationId": "000015001",
+      "address": {
+        "line1": "500 Harbor Blvd",
+        "city": "Oakland",
+        "stateProvince": "CA",
+        "postalCode": "94607",
+        "country": "US"
+      },
+      "transitDays": 1,
+      "deliveryDays": [
+        "MON",
+        "TUE",
+        "WED",
+        "THU",
+        "FRI",
+        "SAT",
+        "SUN"
+      ],
+      "receivingHours": "00:00-23:59",
+      "site": "TRACY",
+      "warehouse": "WH-TRC",
+      "deliveryMode": "TRUCK-REEFER",
+      "temperatureZone": "REFRIGERATED"
+    }
+  ],
+  "items": [
+    {
+      "itemNumber": "TF-10001",
+      "description": "Chopped Romaine",
+      "packSize": "6x2 LB",
+      "brand": "Taylor Farms",
+      "inventoryUom": "CA",
+      "salesUoms": [
+        "CA"
+      ],
+      "uomConversions": {
+        "CA": 1
+      },
+      "listPrice": 24.5,
+      "gtin": "10614141100011",
+      "upc": "61414110001",
+      "shelfLifeDays": 14,
+      "leadTimeDays": 1,
+      "orderIncrement": 1,
+      "minOrderQty": 1,
+      "temperatureZone": "REFRIGERATED",
+      "active": true,
+      "commodityCode": "LEAFY_GREENS",
+      "caseWeightLb": 12,
+      "ftlCovered": true
+    },
+    {
+      "itemNumber": "TF-10002",
+      "description": "Spring Mix",
+      "packSize": "4x3 LB",
+      "brand": "Taylor Farms",
+      "inventoryUom": "CA",
+      "salesUoms": [
+        "CA"
+      ],
+      "uomConversions": {
+        "CA": 1
+      },
+      "listPrice": 31.75,
+      "gtin": "10614141100028",
+      "upc": "61414110002",
+      "shelfLifeDays": 12,
+      "leadTimeDays": 1,
+      "orderIncrement": 1,
+      "minOrderQty": 1,
+      "temperatureZone": "REFRIGERATED",
+      "active": true,
+      "commodityCode": "LEAFY_GREENS",
+      "caseWeightLb": 12,
+      "ftlCovered": true
+    },
+    {
+      "itemNumber": "TF-20001",
+      "description": "Diced Yellow Onion",
+      "packSize": "4x5 LB",
+      "brand": "Taylor Farms",
+      "inventoryUom": "CA",
+      "salesUoms": [
+        "CA"
+      ],
+      "uomConversions": {
+        "CA": 1
+      },
+      "listPrice": 22.0,
+      "gtin": "10614141200018",
+      "upc": "61414120001",
+      "shelfLifeDays": 10,
+      "leadTimeDays": 1,
+      "orderIncrement": 1,
+      "minOrderQty": 1,
+      "temperatureZone": "REFRIGERATED",
+      "active": true,
+      "commodityCode": "FRESH_CUT",
+      "caseWeightLb": 20,
+      "ftlCovered": true
+    },
+    {
+      "itemNumber": "TF-20002",
+      "description": "Shredded Carrot",
+      "packSize": "4x5 LB",
+      "brand": "Taylor Farms",
+      "inventoryUom": "CA",
+      "salesUoms": [
+        "CA"
+      ],
+      "uomConversions": {
+        "CA": 1
+      },
+      "listPrice": 19.8,
+      "gtin": "10614141200025",
+      "upc": "61414120002",
+      "shelfLifeDays": 14,
+      "leadTimeDays": 1,
+      "orderIncrement": 1,
+      "minOrderQty": 1,
+      "temperatureZone": "REFRIGERATED",
+      "active": true,
+      "commodityCode": "FRESH_CUT",
+      "caseWeightLb": 20,
+      "ftlCovered": true
+    },
+    {
+      "itemNumber": "TF-30001",
+      "description": "Caesar Salad Kit",
+      "packSize": "6x10.5 OZ",
+      "brand": "Taylor Farms",
+      "inventoryUom": "CA",
+      "salesUoms": [
+        "CA",
+        "EA"
+      ],
+      "uomConversions": {
+        "CA": 1,
+        "EA": 6
+      },
+      "listPrice": 18.6,
+      "gtin": "10614141300015",
+      "upc": "61414130001",
+      "shelfLifeDays": 16,
+      "leadTimeDays": 1,
+      "orderIncrement": 1,
+      "minOrderQty": 1,
+      "temperatureZone": "REFRIGERATED",
+      "active": true,
+      "commodityCode": "FRESH_CUT",
+      "caseWeightLb": 4,
+      "ftlCovered": true
+    },
+    {
+      "itemNumber": "TF-30002",
+      "description": "Asian Chopped Kit",
+      "packSize": "6x12 OZ",
+      "brand": "Taylor Farms",
+      "inventoryUom": "CA",
+      "salesUoms": [
+        "CA"
+      ],
+      "uomConversions": {
+        "CA": 1
+      },
+      "listPrice": 19.4,
+      "gtin": "10614141300022",
+      "upc": "61414130002",
+      "shelfLifeDays": 16,
+      "leadTimeDays": 1,
+      "orderIncrement": 1,
+      "minOrderQty": 1,
+      "temperatureZone": "REFRIGERATED",
+      "active": true,
+      "commodityCode": "FRESH_CUT",
+      "caseWeightLb": 4.5,
+      "ftlCovered": true
+    },
+    {
+      "itemNumber": "TF-40001",
+      "description": "Broccoli Florets",
+      "packSize": "4x3 LB",
+      "brand": "Taylor Farms",
+      "inventoryUom": "CA",
+      "salesUoms": [
+        "CA"
+      ],
+      "uomConversions": {
+        "CA": 1
+      },
+      "listPrice": 27.3,
+      "gtin": "10614141400012",
+      "upc": "61414140001",
+      "shelfLifeDays": 12,
+      "leadTimeDays": 2,
+      "orderIncrement": 1,
+      "minOrderQty": 1,
+      "temperatureZone": "REFRIGERATED",
+      "active": true,
+      "commodityCode": "FRESH_CUT",
+      "caseWeightLb": 12,
+      "ftlCovered": true
+    },
+    {
+      "itemNumber": "TF-50001",
+      "description": "Fresh Fruit Cup",
+      "packSize": "12x7 OZ",
+      "brand": "Taylor Farms",
+      "inventoryUom": "CA",
+      "salesUoms": [
+        "CA"
+      ],
+      "uomConversions": {
+        "CA": 1
+      },
+      "listPrice": 21.9,
+      "gtin": "10614141500019",
+      "upc": "61414150001",
+      "shelfLifeDays": 9,
+      "leadTimeDays": 2,
+      "orderIncrement": 2,
+      "minOrderQty": 2,
+      "temperatureZone": "REFRIGERATED",
+      "active": true,
+      "commodityCode": "FRESH_CUT",
+      "caseWeightLb": 5.5,
+      "ftlCovered": true
+    },
+    {
+      "itemNumber": "TF-90001",
+      "description": "Classic Cole Slaw (discontinued)",
+      "packSize": "4x5 LB",
+      "brand": "Taylor Farms",
+      "inventoryUom": "CA",
+      "salesUoms": [
+        "CA"
+      ],
+      "uomConversions": {
+        "CA": 1
+      },
+      "listPrice": 17.0,
+      "gtin": "10614141900017",
+      "upc": "61414190001",
+      "shelfLifeDays": 10,
+      "leadTimeDays": 1,
+      "orderIncrement": 1,
+      "minOrderQty": 1,
+      "temperatureZone": "REFRIGERATED",
+      "active": false,
+      "commodityCode": "FRESH_CUT",
+      "caseWeightLb": 12,
+      "ftlCovered": true
+    }
+  ],
+  "priceAgreements": [
+    {
+      "agreementId": "TA-FM-2026",
+      "customerId": "C-1001",
+      "itemNumber": "TF-10001",
+      "price": 24.5,
+      "uom": "CA",
+      "validFrom": "2026-01-01",
+      "validTo": "2026-12-31"
+    },
+    {
+      "agreementId": "TA-FM-2026",
+      "customerId": "C-1001",
+      "itemNumber": "TF-10002",
+      "price": 31.0,
+      "uom": "CA",
+      "validFrom": "2026-01-01",
+      "validTo": "2026-12-31"
+    },
+    {
+      "agreementId": "TA-FM-2026",
+      "customerId": "C-1001",
+      "itemNumber": "TF-20001",
+      "price": 21.5,
+      "uom": "CA",
+      "validFrom": "2026-01-01",
+      "validTo": "2026-12-31"
+    },
+    {
+      "agreementId": "TA-FM-2026",
+      "customerId": "C-1001",
+      "itemNumber": "TF-30001",
+      "price": 18.1,
+      "uom": "CA",
+      "validFrom": "2026-01-01",
+      "validTo": "2026-12-31"
+    },
+    {
+      "agreementId": "TA-SF-2026",
+      "customerId": "C-1002",
+      "itemNumber": "TF-20001",
+      "price": 20.75,
+      "uom": "CA",
+      "validFrom": "2026-01-01",
+      "validTo": "2026-12-31"
+    },
+    {
+      "agreementId": "TA-SF-2026",
+      "customerId": "C-1002",
+      "itemNumber": "TF-20002",
+      "price": 18.9,
+      "uom": "CA",
+      "validFrom": "2026-01-01",
+      "validTo": "2026-12-31"
+    },
+    {
+      "agreementId": "TA-SF-2026",
+      "customerId": "C-1002",
+      "itemNumber": "TF-40001",
+      "price": 26.1,
+      "uom": "CA",
+      "validFrom": "2026-01-01",
+      "validTo": "2026-12-31"
+    },
+    {
+      "agreementId": "TA-BMK-2026",
+      "customerId": "C-1005",
+      "itemNumber": "TF-30001",
+      "price": 17.95,
+      "uom": "CA",
+      "validFrom": "2026-01-01",
+      "validTo": "2026-12-31"
+    },
+    {
+      "agreementId": "TA-BMK-2026",
+      "customerId": "C-1005",
+      "itemNumber": "TF-30002",
+      "price": 18.7,
+      "uom": "CA",
+      "validFrom": "2026-01-01",
+      "validTo": "2026-12-31"
+    }
+  ],
+  "itemXref": [
+    {
+      "customerId": "C-1001",
+      "buyerItemNumber": "FM-55012",
+      "itemNumber": "TF-10001"
+    },
+    {
+      "customerId": "C-1001",
+      "buyerItemNumber": "FM-55013",
+      "itemNumber": "TF-10002"
+    },
+    {
+      "customerId": "C-1001",
+      "buyerItemNumber": "FM-66001",
+      "itemNumber": "TF-20001"
+    },
+    {
+      "customerId": "C-1001",
+      "buyerItemNumber": "FM-77001",
+      "itemNumber": "TF-30001"
+    },
+    {
+      "customerId": "C-1002",
+      "buyerItemNumber": "SF-9001",
+      "itemNumber": "TF-20001"
+    },
+    {
+      "customerId": "C-1002",
+      "buyerItemNumber": "SF-9002",
+      "itemNumber": "TF-20002"
+    },
+    {
+      "customerId": "C-1002",
+      "buyerItemNumber": "SF-9100",
+      "itemNumber": "TF-40001"
+    },
+    {
+      "customerId": "C-1001",
+      "buyerItemNumber": "FM-55020",
+      "itemNumber": "TF-10002"
+    },
+    {
+      "customerId": "C-1001",
+      "buyerItemNumber": "FM-61001",
+      "itemNumber": "TF-20001"
+    }
+  ],
+  "tradingPartners": [
+    {
+      "isaId": "FRESHMART",
+      "isaQualifier": "ZZ",
+      "customerId": "C-1001",
+      "name": "FreshMart Grocery",
+      "x12Version": "004010",
+      "send997": true,
+      "send855": true,
+      "send856": true,
+      "send810": true,
+      "ackSlaMinutes": {
+        "997": 15,
+        "855": 240,
+        "856": 60
+      }
+    },
+    {
+      "isaId": "SUNRISEFS",
+      "isaQualifier": "ZZ",
+      "customerId": "C-1002",
+      "name": "Sunrise Foodservice",
+      "x12Version": "004010",
+      "send997": true,
+      "send855": true,
+      "send856": true,
+      "send810": false,
+      "ackSlaMinutes": {
+        "997": 30,
+        "855": 480,
+        "856": 120
+      }
+    }
+  ],
+  "inventory": {
+    "TF-10001": 5000,
+    "TF-10002": 3000,
+    "TF-20001": 4000,
+    "TF-20002": 2500,
+    "TF-30001": 3000,
+    "TF-30002": 1500,
+    "TF-40001": 20,
+    "TF-50001": 800
+  },
+  "warehouses": [
+    {
+      "warehouse": "WH-SAL",
+      "site": "SALINAS",
+      "name": "Salinas Processing"
+    },
+    {
+      "warehouse": "WH-TRC",
+      "site": "TRACY",
+      "name": "Tracy Processing"
+    }
+  ],
+  "carriers": [
+    {
+      "scac": "CRSF",
+      "name": "Cold Road Freight"
+    },
+    {
+      "scac": "VLYX",
+      "name": "Valley Reefer Express"
+    }
+  ]
+}

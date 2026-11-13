@@ -1,0 +1,4076 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.taylorfarms.example/sales-order/sales-order.v1.json",
+  "title": "Canonical Sales Order",
+  "x-cdm-version": "1.0.0",
+  "$defs": {
+    "AckTimestamps": {
+      "properties": {
+        "functionalAck997": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Functionalack997"
+        },
+        "poAck855": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Poack855"
+        },
+        "shipNotice856": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Shipnotice856"
+        },
+        "invoice810": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Invoice810"
+        }
+      },
+      "title": "AckTimestamps",
+      "type": "object"
+    },
+    "AckType": {
+      "enum": [
+        "FUNCTIONAL_ACK_997",
+        "PO_ACK_855",
+        "SHIP_NOTICE_856",
+        "INVOICE_810",
+        "EMAIL_CONFIRMATION",
+        "PORTAL_NOTIFICATION",
+        "WEBHOOK"
+      ],
+      "title": "AckType",
+      "type": "string"
+    },
+    "Acknowledgment": {
+      "properties": {
+        "type": {
+          "$ref": "#/$defs/AckType"
+        },
+        "documentId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Documentid"
+        },
+        "controlNumber": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Controlnumber"
+        },
+        "status": {
+          "default": "SENT",
+          "enum": [
+            "ACCEPTED",
+            "ACCEPTED_WITH_CHANGES",
+            "REJECTED",
+            "SENT"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "channel": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Channel"
+        },
+        "recipient": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Recipient"
+        },
+        "sentAt": {
+          "format": "date-time",
+          "title": "Sentat",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "sentAt"
+      ],
+      "title": "Acknowledgment",
+      "type": "object"
+    },
+    "Actor": {
+      "properties": {
+        "type": {
+          "$ref": "#/$defs/ActorType",
+          "default": "SYSTEM"
+        },
+        "id": {
+          "description": "User principal, service name or trading-partner id",
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Name"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "title": "Actor",
+      "type": "object"
+    },
+    "ActorType": {
+      "enum": [
+        "SYSTEM",
+        "USER",
+        "CUSTOMER",
+        "PARTNER"
+      ],
+      "title": "ActorType",
+      "type": "string"
+    },
+    "Address": {
+      "properties": {
+        "line1": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Line1"
+        },
+        "line2": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Line2"
+        },
+        "city": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "City"
+        },
+        "stateProvince": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Stateprovince"
+        },
+        "postalCode": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Postalcode"
+        },
+        "country": {
+          "default": "US",
+          "description": "ISO 3166-1 alpha-2",
+          "title": "Country",
+          "type": "string"
+        }
+      },
+      "title": "Address",
+      "type": "object"
+    },
+    "AllowanceCharge": {
+      "properties": {
+        "indicator": {
+          "enum": [
+            "ALLOWANCE",
+            "CHARGE"
+          ],
+          "title": "Indicator",
+          "type": "string"
+        },
+        "code": {
+          "description": "X12 SAC02 code e.g. D240 freight, C310 discount, F050 fuel",
+          "title": "Code",
+          "type": "string"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "amount": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Amount"
+        },
+        "percent": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Percent"
+        },
+        "lineNumber": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Linenumber"
+        }
+      },
+      "required": [
+        "indicator",
+        "code"
+      ],
+      "title": "AllowanceCharge",
+      "type": "object"
+    },
+    "AuditInfo": {
+      "properties": {
+        "createdAt": {
+          "format": "date-time",
+          "title": "Createdat",
+          "type": "string"
+        },
+        "createdBy": {
+          "title": "Createdby",
+          "type": "string"
+        },
+        "updatedAt": {
+          "format": "date-time",
+          "title": "Updatedat",
+          "type": "string"
+        },
+        "updatedBy": {
+          "title": "Updatedby",
+          "type": "string"
+        },
+        "contractVersion": {
+          "default": "1.0.0",
+          "title": "Contractversion",
+          "type": "string"
+        },
+        "lineage": {
+          "items": {
+            "$ref": "#/$defs/LineageStep"
+          },
+          "title": "Lineage",
+          "type": "array"
+        }
+      },
+      "required": [
+        "createdAt",
+        "createdBy",
+        "updatedAt",
+        "updatedBy"
+      ],
+      "title": "AuditInfo",
+      "type": "object"
+    },
+    "Commercial": {
+      "properties": {
+        "currency": {
+          "default": "USD",
+          "title": "Currency",
+          "type": "string"
+        },
+        "paymentTerms": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PaymentTerms"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "priceAgreementId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Trade agreement journal applied",
+          "title": "Priceagreementid"
+        },
+        "customerPriceGroup": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Customerpricegroup"
+        },
+        "incoterms": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Incoterms 2020 code, e.g. FCA, DAP",
+          "title": "Incoterms"
+        },
+        "fobPoint": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "X12 FOB01: PP prepaid, CC collect",
+          "title": "Fobpoint"
+        },
+        "salesResponsible": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Salesresponsible"
+        },
+        "taxExemptNumber": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Taxexemptnumber"
+        }
+      },
+      "title": "Commercial",
+      "type": "object"
+    },
+    "Contact": {
+      "properties": {
+        "role": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "X12 PER01 e.g. BD (buyer), OC (order contact)",
+          "title": "Role"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Name"
+        },
+        "email": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Email"
+        },
+        "phone": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Phone"
+        }
+      },
+      "title": "Contact",
+      "type": "object"
+    },
+    "CycleTimes": {
+      "properties": {
+        "receiptToErpMinutes": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Receipttoerpminutes"
+        },
+        "receiptToShipHours": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Receipttoshiphours"
+        },
+        "receiptToInvoiceHours": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Receipttoinvoicehours"
+        },
+        "shipToAsnMinutes": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Chargeback driver: ASN latency after ship",
+          "title": "Shiptoasnminutes"
+        }
+      },
+      "title": "CycleTimes",
+      "type": "object"
+    },
+    "DataQuality": {
+      "properties": {
+        "ruleSetVersion": {
+          "default": "1.0",
+          "title": "Rulesetversion",
+          "type": "string"
+        },
+        "validatedAt": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Validatedat"
+        },
+        "attempt": {
+          "default": 0,
+          "title": "Attempt",
+          "type": "integer"
+        },
+        "passed": {
+          "default": false,
+          "title": "Passed",
+          "type": "boolean"
+        },
+        "firstPass": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "True when the first validation attempt passed every rule",
+          "title": "Firstpass"
+        },
+        "score": {
+          "default": 0,
+          "description": "Share of rule checks passed (0-1)",
+          "title": "Score",
+          "type": "number"
+        },
+        "results": {
+          "items": {
+            "$ref": "#/$defs/RuleResult"
+          },
+          "title": "Results",
+          "type": "array"
+        }
+      },
+      "title": "DataQuality",
+      "type": "object"
+    },
+    "DateWindow": {
+      "properties": {
+        "start": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Start"
+        },
+        "end": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "End"
+        }
+      },
+      "title": "DateWindow",
+      "type": "object"
+    },
+    "ErpReference": {
+      "properties": {
+        "system": {
+          "default": "D365FO",
+          "title": "System",
+          "type": "string"
+        },
+        "company": {
+          "description": "D365 legal entity (dataAreaId)",
+          "title": "Company",
+          "type": "string"
+        },
+        "salesOrderId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "D365 SalesOrderNumber",
+          "title": "Salesorderid"
+        },
+        "salesOrderStatus": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "D365 SalesStatus: Backorder, Delivered, Invoiced, Canceled",
+          "title": "Salesorderstatus"
+        },
+        "customerAccount": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "OrderingCustomerAccountNumber",
+          "title": "Customeraccount"
+        },
+        "invoiceAccount": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "InvoiceCustomerAccountNumber",
+          "title": "Invoiceaccount"
+        },
+        "siteId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Siteid"
+        },
+        "warehouseId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Warehouseid"
+        },
+        "deliveryMode": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Deliverymode"
+        },
+        "createdAt": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Createdat"
+        },
+        "lastSyncedAt": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Lastsyncedat"
+        },
+        "rejectionReason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rejectionreason"
+        }
+      },
+      "required": [
+        "company"
+      ],
+      "title": "ErpReference",
+      "type": "object"
+    },
+    "ExceptionState": {
+      "enum": [
+        "OPEN",
+        "RESOLVED",
+        "OVERRIDDEN"
+      ],
+      "title": "ExceptionState",
+      "type": "string"
+    },
+    "ExtractionInfo": {
+      "properties": {
+        "method": {
+          "default": "STRUCTURED",
+          "enum": [
+            "STRUCTURED",
+            "TEMPLATE",
+            "OCR",
+            "LLM",
+            "MANUAL"
+          ],
+          "title": "Method",
+          "type": "string"
+        },
+        "confidence": {
+          "default": 1.0,
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Confidence",
+          "type": "number"
+        },
+        "modelId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Modelid"
+        },
+        "fieldsLowConfidence": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Fieldslowconfidence",
+          "type": "array"
+        }
+      },
+      "title": "ExtractionInfo",
+      "type": "object"
+    },
+    "HistoryEventType": {
+      "enum": [
+        "ORDER_RECEIVED",
+        "ORDER_INGESTED",
+        "VALIDATION_PASSED",
+        "VALIDATION_FAILED",
+        "ORDER_ENRICHED",
+        "ORDER_PUBLISHED",
+        "ORDER_CORRECTED",
+        "ORDER_RESUBMITTED",
+        "SUBMITTED_TO_ERP",
+        "ERP_ACCEPTED",
+        "ERP_REJECTED",
+        "CREDIT_HOLD_PLACED",
+        "HOLD_PLACED",
+        "HOLD_RELEASED",
+        "INVENTORY_RESERVED",
+        "LINE_BACKORDERED",
+        "RELEASED_TO_WAREHOUSE",
+        "PICKED",
+        "PACKED",
+        "SHIPPED",
+        "DELIVERED",
+        "INVOICED",
+        "CLOSED",
+        "CANCELLED",
+        "REJECTED",
+        "DOCUMENT_SENT",
+        "NOTIFICATION_SENT",
+        "LATE_EVENT_IGNORED",
+        "ORDER_SPLIT",
+        "ORDER_LINKED"
+      ],
+      "title": "HistoryEventType",
+      "type": "string"
+    },
+    "Invoice": {
+      "properties": {
+        "invoiceId": {
+          "title": "Invoiceid",
+          "type": "string"
+        },
+        "invoiceDate": {
+          "format": "date",
+          "title": "Invoicedate",
+          "type": "string"
+        },
+        "dueDate": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Duedate"
+        },
+        "amount": {
+          "title": "Amount",
+          "type": "string"
+        },
+        "taxAmount": {
+          "default": "0",
+          "title": "Taxamount",
+          "type": "string"
+        },
+        "currency": {
+          "default": "USD",
+          "title": "Currency",
+          "type": "string"
+        },
+        "status": {
+          "default": "POSTED",
+          "enum": [
+            "POSTED",
+            "SENT",
+            "PAID",
+            "CREDITED"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "lines": {
+          "items": {
+            "$ref": "#/$defs/InvoiceLine"
+          },
+          "title": "Lines",
+          "type": "array"
+        }
+      },
+      "required": [
+        "invoiceId",
+        "invoiceDate",
+        "amount"
+      ],
+      "title": "Invoice",
+      "type": "object"
+    },
+    "InvoiceLine": {
+      "properties": {
+        "lineNumber": {
+          "title": "Linenumber",
+          "type": "integer"
+        },
+        "quantity": {
+          "title": "Quantity",
+          "type": "string"
+        },
+        "unitPrice": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Unitprice"
+        },
+        "amount": {
+          "title": "Amount",
+          "type": "string"
+        }
+      },
+      "required": [
+        "lineNumber",
+        "quantity",
+        "amount"
+      ],
+      "title": "InvoiceLine",
+      "type": "object"
+    },
+    "ItemReference": {
+      "properties": {
+        "itemNumber": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Taylor Farms item number (D365 ItemNumber)",
+          "title": "Itemnumber"
+        },
+        "buyerItemNumber": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "PO1 qualifier IN",
+          "title": "Buyeritemnumber"
+        },
+        "vendorItemNumber": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "PO1 qualifier VN",
+          "title": "Vendoritemnumber"
+        },
+        "gtin": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "GS1 GTIN-14 (case)",
+          "title": "Gtin"
+        },
+        "upc": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "GTIN-12 consumer unit (PO1 qualifier UP)",
+          "title": "Upc"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "brand": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Brand"
+        },
+        "packSize": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "e.g. 6x2 LB",
+          "title": "Packsize"
+        },
+        "temperatureZone": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TemperatureZone"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "shelfLifeDays": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Shelflifedays"
+        },
+        "caseWeightLb": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Caseweightlb"
+        },
+        "commodityCode": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Produce commodity / FSMA Food Traceability List category",
+          "title": "Commoditycode"
+        }
+      },
+      "title": "ItemReference",
+      "type": "object"
+    },
+    "LineChange": {
+      "properties": {
+        "lineNumber": {
+          "title": "Linenumber",
+          "type": "integer"
+        },
+        "field": {
+          "title": "Field",
+          "type": "string"
+        },
+        "fromValue": {
+          "default": null,
+          "title": "Fromvalue"
+        },
+        "toValue": {
+          "default": null,
+          "title": "Tovalue"
+        }
+      },
+      "required": [
+        "lineNumber",
+        "field"
+      ],
+      "title": "LineChange",
+      "type": "object"
+    },
+    "LineQuantities": {
+      "properties": {
+        "ordered": {
+          "default": "0",
+          "title": "Ordered",
+          "type": "string"
+        },
+        "confirmed": {
+          "default": "0",
+          "title": "Confirmed",
+          "type": "string"
+        },
+        "backordered": {
+          "default": "0",
+          "title": "Backordered",
+          "type": "string"
+        },
+        "allocated": {
+          "default": "0",
+          "title": "Allocated",
+          "type": "string"
+        },
+        "picked": {
+          "default": "0",
+          "title": "Picked",
+          "type": "string"
+        },
+        "shipped": {
+          "default": "0",
+          "title": "Shipped",
+          "type": "string"
+        },
+        "delivered": {
+          "default": "0",
+          "title": "Delivered",
+          "type": "string"
+        },
+        "invoiced": {
+          "default": "0",
+          "title": "Invoiced",
+          "type": "string"
+        },
+        "cancelled": {
+          "default": "0",
+          "title": "Cancelled",
+          "type": "string"
+        }
+      },
+      "title": "LineQuantities",
+      "type": "object"
+    },
+    "LineStatus": {
+      "enum": [
+        "OPEN",
+        "CONFIRMED",
+        "BACKORDERED",
+        "ALLOCATED",
+        "RELEASED",
+        "PICKED",
+        "PACKED",
+        "SHIPPED",
+        "DELIVERED",
+        "INVOICED",
+        "CANCELLED"
+      ],
+      "title": "LineStatus",
+      "type": "string"
+    },
+    "LineageStep": {
+      "properties": {
+        "step": {
+          "enum": [
+            "CAPTURE",
+            "INGEST",
+            "VALIDATE",
+            "ENRICH",
+            "CANONICALIZE",
+            "PUBLISH",
+            "ORCHESTRATE",
+            "SYNC"
+          ],
+          "title": "Step",
+          "type": "string"
+        },
+        "service": {
+          "title": "Service",
+          "type": "string"
+        },
+        "at": {
+          "format": "date-time",
+          "title": "At",
+          "type": "string"
+        },
+        "inputRef": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Inputref"
+        },
+        "outputRef": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Outputref"
+        }
+      },
+      "required": [
+        "step",
+        "service",
+        "at"
+      ],
+      "title": "LineageStep",
+      "type": "object"
+    },
+    "LotAllocation": {
+      "properties": {
+        "lotNumber": {
+          "title": "Lotnumber",
+          "type": "string"
+        },
+        "quantity": {
+          "title": "Quantity",
+          "type": "string"
+        },
+        "traceabilityLotCode": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "FSMA 204 Traceability Lot Code (TLC)",
+          "title": "Traceabilitylotcode"
+        },
+        "packDate": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Packdate"
+        },
+        "harvestDate": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Harvestdate"
+        },
+        "bestByDate": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Bestbydate"
+        },
+        "countryOfOrigin": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Countryoforigin"
+        }
+      },
+      "required": [
+        "lotNumber",
+        "quantity"
+      ],
+      "title": "LotAllocation",
+      "type": "object"
+    },
+    "ManualTouch": {
+      "properties": {
+        "at": {
+          "format": "date-time",
+          "title": "At",
+          "type": "string"
+        },
+        "actor": {
+          "title": "Actor",
+          "type": "string"
+        },
+        "action": {
+          "title": "Action",
+          "type": "string"
+        },
+        "minutes": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Estimated handling minutes for labor ROI",
+          "title": "Minutes"
+        }
+      },
+      "required": [
+        "at",
+        "actor",
+        "action"
+      ],
+      "title": "ManualTouch",
+      "type": "object"
+    },
+    "Note": {
+      "properties": {
+        "type": {
+          "default": "CUSTOMER",
+          "enum": [
+            "CUSTOMER",
+            "INTERNAL",
+            "SHIPPING",
+            "RECEIVING"
+          ],
+          "title": "Type",
+          "type": "string"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "createdBy": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Createdby"
+        },
+        "createdAt": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Createdat"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "Note",
+      "type": "object"
+    },
+    "OrderDates": {
+      "properties": {
+        "orderDate": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Customer PO date",
+          "title": "Orderdate"
+        },
+        "requestedDeliveryDate": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "DTM*002",
+          "title": "Requesteddeliverydate"
+        },
+        "requestedShipDate": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "DTM*010; derived from transit time when absent",
+          "title": "Requestedshipdate"
+        },
+        "promisedShipDate": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Confirmed by D365 (855 DTM*068)",
+          "title": "Promisedshipdate"
+        },
+        "promisedDeliveryDate": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Promiseddeliverydate"
+        },
+        "cancelByDate": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "DTM*001 cancel-after",
+          "title": "Cancelbydate"
+        },
+        "deliveryWindow": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DateWindow"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "title": "OrderDates",
+      "type": "object"
+    },
+    "OrderException": {
+      "properties": {
+        "exceptionId": {
+          "title": "Exceptionid",
+          "type": "string"
+        },
+        "code": {
+          "description": "Machine-readable reason code, e.g. PRICE_MISMATCH",
+          "title": "Code",
+          "type": "string"
+        },
+        "ruleId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ruleid"
+        },
+        "severity": {
+          "$ref": "#/$defs/Severity",
+          "default": "ERROR"
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        },
+        "lineNumber": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Linenumber"
+        },
+        "field": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Field"
+        },
+        "detectedAt": {
+          "format": "date-time",
+          "title": "Detectedat",
+          "type": "string"
+        },
+        "detectedBy": {
+          "default": "process-api",
+          "title": "Detectedby",
+          "type": "string"
+        },
+        "state": {
+          "$ref": "#/$defs/ExceptionState",
+          "default": "OPEN"
+        },
+        "resolvedAt": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Resolvedat"
+        },
+        "resolvedBy": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Resolvedby"
+        },
+        "resolutionNote": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Resolutionnote"
+        }
+      },
+      "required": [
+        "exceptionId",
+        "code",
+        "message",
+        "detectedAt"
+      ],
+      "title": "OrderException",
+      "type": "object"
+    },
+    "OrderHistoryEntry": {
+      "description": "One immutable entry in the lifecycle of an order (append-only, ordered by `sequence`).",
+      "properties": {
+        "eventId": {
+          "title": "Eventid",
+          "type": "string"
+        },
+        "orderId": {
+          "title": "Orderid",
+          "type": "string"
+        },
+        "orderGroupId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ordergroupid"
+        },
+        "sequence": {
+          "description": "Monotonic per order",
+          "minimum": 1,
+          "title": "Sequence",
+          "type": "integer"
+        },
+        "eventType": {
+          "$ref": "#/$defs/HistoryEventType"
+        },
+        "occurredAt": {
+          "description": "When it happened in the source system",
+          "format": "date-time",
+          "title": "Occurredat",
+          "type": "string"
+        },
+        "recordedAt": {
+          "description": "When the data product recorded it",
+          "format": "date-time",
+          "title": "Recordedat",
+          "type": "string"
+        },
+        "fromStatus": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/OrderStatus"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "toStatus": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/OrderStatus"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "statusCategory": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StatusCategory"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "tier": {
+          "$ref": "#/$defs/Tier",
+          "default": "TIER2"
+        },
+        "sourceSystem": {
+          "description": "EDI-GATEWAY, EMAIL, PORTAL, PROCESS-API, D365, WMS, TMS, CRM ...",
+          "title": "Sourcesystem",
+          "type": "string"
+        },
+        "actor": {
+          "$ref": "#/$defs/Actor"
+        },
+        "correlationId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Correlationid"
+        },
+        "causationId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Event or command that caused this entry",
+          "title": "Causationid"
+        },
+        "externalEventId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Idempotency key from the source system",
+          "title": "Externaleventid"
+        },
+        "reasonCode": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reasoncode"
+        },
+        "message": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Message"
+        },
+        "lineChanges": {
+          "items": {
+            "$ref": "#/$defs/LineChange"
+          },
+          "title": "Linechanges",
+          "type": "array"
+        },
+        "changes": {
+          "description": "JSON-Patch style diff of the canonical order",
+          "items": {
+            "$ref": "#/$defs/PatchOperation"
+          },
+          "title": "Changes",
+          "type": "array"
+        },
+        "documentRef": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Documentref"
+        },
+        "elapsedSincePreviousSeconds": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Elapsedsincepreviousseconds"
+        }
+      },
+      "required": [
+        "eventId",
+        "orderId",
+        "sequence",
+        "eventType",
+        "occurredAt",
+        "recordedAt",
+        "sourceSystem",
+        "actor"
+      ],
+      "title": "OrderHistoryEntry",
+      "type": "object"
+    },
+    "OrderLine": {
+      "properties": {
+        "lineNumber": {
+          "description": "Data product line number",
+          "minimum": 1,
+          "title": "Linenumber",
+          "type": "integer"
+        },
+        "buyerLineNumber": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "PO101 assigned identification",
+          "title": "Buyerlinenumber"
+        },
+        "erpLineId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "D365 LineCreationSequenceNumber / InventTransId",
+          "title": "Erplineid"
+        },
+        "item": {
+          "$ref": "#/$defs/ItemReference"
+        },
+        "quantity": {
+          "$ref": "#/$defs/Quantity",
+          "description": "Ordered quantity in the customer's unit of measure"
+        },
+        "quantities": {
+          "$ref": "#/$defs/LineQuantities",
+          "description": "Running quantities across the lifecycle"
+        },
+        "unitPrice": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Price"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "lineAmount": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Lineamount"
+        },
+        "allowancesCharges": {
+          "items": {
+            "$ref": "#/$defs/AllowanceCharge"
+          },
+          "title": "Allowancescharges",
+          "type": "array"
+        },
+        "taxes": {
+          "items": {
+            "$ref": "#/$defs/TaxAmount"
+          },
+          "title": "Taxes",
+          "type": "array"
+        },
+        "requestedDeliveryDate": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Requesteddeliverydate"
+        },
+        "requestedShipDate": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Requestedshipdate"
+        },
+        "promisedShipDate": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Promisedshipdate"
+        },
+        "status": {
+          "$ref": "#/$defs/LineStatus",
+          "default": "OPEN"
+        },
+        "substitutionAllowed": {
+          "default": false,
+          "title": "Substitutionallowed",
+          "type": "boolean"
+        },
+        "substitutedItemNumber": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Substituteditemnumber"
+        },
+        "minRemainingShelfLifeDays": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Minremainingshelflifedays"
+        },
+        "lots": {
+          "items": {
+            "$ref": "#/$defs/LotAllocation"
+          },
+          "title": "Lots",
+          "type": "array"
+        },
+        "notes": {
+          "items": {
+            "$ref": "#/$defs/Note"
+          },
+          "title": "Notes",
+          "type": "array"
+        }
+      },
+      "required": [
+        "lineNumber",
+        "item",
+        "quantity"
+      ],
+      "title": "OrderLine",
+      "type": "object"
+    },
+    "OrderPurpose": {
+      "enum": [
+        "ORIGINAL",
+        "CHANGE",
+        "CANCELLATION",
+        "REPLACE",
+        "CONFIRMATION"
+      ],
+      "title": "OrderPurpose",
+      "type": "string"
+    },
+    "OrderStatus": {
+      "enum": [
+        "RECEIVED",
+        "INGESTED",
+        "EXCEPTION",
+        "VALIDATED",
+        "ENRICHED",
+        "PUBLISHED",
+        "SUBMITTED_TO_ERP",
+        "ERP_REJECTED",
+        "CREDIT_HOLD",
+        "ACCEPTED",
+        "ON_HOLD",
+        "RELEASED",
+        "PICKED",
+        "PACKED",
+        "PARTIALLY_SHIPPED",
+        "SHIPPED",
+        "DELIVERED",
+        "INVOICED",
+        "CLOSED",
+        "CANCELLED",
+        "REJECTED"
+      ],
+      "title": "OrderStatus",
+      "type": "string"
+    },
+    "OrderType": {
+      "enum": [
+        "STANDARD",
+        "RUSH",
+        "STANDING",
+        "BLANKET_RELEASE",
+        "DROP_SHIP",
+        "SAMPLE",
+        "REPLACEMENT"
+      ],
+      "title": "OrderType",
+      "type": "string"
+    },
+    "Parties": {
+      "properties": {
+        "soldTo": {
+          "$ref": "#/$defs/Party"
+        },
+        "shipTo": {
+          "$ref": "#/$defs/Party"
+        },
+        "billTo": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Party"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "payer": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Party"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "buyer": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Party"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "supplier": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Party"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "shipFrom": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Party"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "carrier": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Party"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "soldTo",
+        "shipTo"
+      ],
+      "title": "Parties",
+      "type": "object"
+    },
+    "Party": {
+      "properties": {
+        "role": {
+          "enum": [
+            "SOLD_TO",
+            "SHIP_TO",
+            "BILL_TO",
+            "PAYER",
+            "BUYER",
+            "SUPPLIER",
+            "CARRIER",
+            "SHIP_FROM"
+          ],
+          "title": "Role",
+          "type": "string"
+        },
+        "partyId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Data product party key (customer id or ship-to id)",
+          "title": "Partyid"
+        },
+        "customerId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Owning customer id (for SHIP_TO / BILL_TO)",
+          "title": "Customerid"
+        },
+        "erpAccount": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "D365 customer account / delivery address location id",
+          "title": "Erpaccount"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Name"
+        },
+        "gln": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "GS1 Global Location Number (N104 qualifier UL)",
+          "title": "Gln"
+        },
+        "duns": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "DUNS (N104 qualifier 1)",
+          "title": "Duns"
+        },
+        "ediLocationCode": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Buyer-assigned location code (N104 qualifier 92)",
+          "title": "Edilocationcode"
+        },
+        "address": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Address"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "contacts": {
+          "items": {
+            "$ref": "#/$defs/Contact"
+          },
+          "title": "Contacts",
+          "type": "array"
+        },
+        "receivingHours": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Receivinghours"
+        },
+        "deliveryDays": {
+          "description": "Days the location accepts deliveries",
+          "items": {
+            "type": "string"
+          },
+          "title": "Deliverydays",
+          "type": "array"
+        }
+      },
+      "required": [
+        "role"
+      ],
+      "title": "Party",
+      "type": "object"
+    },
+    "PatchOperation": {
+      "properties": {
+        "op": {
+          "enum": [
+            "add",
+            "remove",
+            "replace"
+          ],
+          "title": "Op",
+          "type": "string"
+        },
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "value": {
+          "default": null,
+          "title": "Value"
+        },
+        "fromValue": {
+          "default": null,
+          "title": "Fromvalue"
+        }
+      },
+      "required": [
+        "op",
+        "path"
+      ],
+      "title": "PatchOperation",
+      "type": "object"
+    },
+    "PaymentTerms": {
+      "properties": {
+        "code": {
+          "description": "D365 terms of payment code, e.g. Net30",
+          "title": "Code",
+          "type": "string"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "netDays": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Netdays"
+        },
+        "discountPercent": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Discountpercent"
+        },
+        "discountDays": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Discountdays"
+        }
+      },
+      "required": [
+        "code"
+      ],
+      "title": "PaymentTerms",
+      "type": "object"
+    },
+    "Price": {
+      "properties": {
+        "amount": {
+          "description": "Unit price per pricing UOM",
+          "title": "Amount",
+          "type": "string"
+        },
+        "currency": {
+          "default": "USD",
+          "title": "Currency",
+          "type": "string"
+        },
+        "basisUom": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Pricing unit (PO105 basis)",
+          "title": "Basisuom"
+        },
+        "source": {
+          "default": "PURCHASE_ORDER",
+          "enum": [
+            "CUSTOMER_AGREEMENT",
+            "LIST",
+            "PURCHASE_ORDER",
+            "MANUAL_OVERRIDE"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "agreementId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Agreementid"
+        },
+        "agreementPrice": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Price per the trade agreement at validation time",
+          "title": "Agreementprice"
+        },
+        "listPrice": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Listprice"
+        }
+      },
+      "required": [
+        "amount"
+      ],
+      "title": "Price",
+      "type": "object"
+    },
+    "ProofOfDelivery": {
+      "properties": {
+        "receivedBy": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Receivedby"
+        },
+        "receivedAt": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Receivedat"
+        },
+        "exceptions": {
+          "description": "OS&D: over, short, damaged, temperature",
+          "items": {
+            "type": "string"
+          },
+          "title": "Exceptions",
+          "type": "array"
+        }
+      },
+      "title": "ProofOfDelivery",
+      "type": "object"
+    },
+    "PurchaseOrderReference": {
+      "properties": {
+        "poNumber": {
+          "description": "Customer purchase order number (X12 BEG03)",
+          "title": "Ponumber",
+          "type": "string"
+        },
+        "poDate": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "BEG05",
+          "title": "Podate"
+        },
+        "releaseNumber": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "BEG04 - blanket release",
+          "title": "Releasenumber"
+        },
+        "contractNumber": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "REF*CT",
+          "title": "Contractnumber"
+        },
+        "department": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "REF*DP",
+          "title": "Department"
+        },
+        "promotionDealNumber": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "REF*PD",
+          "title": "Promotiondealnumber"
+        }
+      },
+      "required": [
+        "poNumber"
+      ],
+      "title": "PurchaseOrderReference",
+      "type": "object"
+    },
+    "Quantity": {
+      "properties": {
+        "value": {
+          "description": "Quantity in the stated unit of measure",
+          "title": "Value",
+          "type": "string"
+        },
+        "uom": {
+          "description": "X12 355 unit code: CA (case), EA, LB, BX, PL (pallet)",
+          "title": "Uom",
+          "type": "string"
+        }
+      },
+      "required": [
+        "value",
+        "uom"
+      ],
+      "title": "Quantity",
+      "type": "object"
+    },
+    "Reference": {
+      "properties": {
+        "qualifier": {
+          "description": "X12 REF01 / OAGIS DocumentReference type, e.g. DP (department), CT (contract), IA (vendor #)",
+          "title": "Qualifier",
+          "type": "string"
+        },
+        "value": {
+          "title": "Value",
+          "type": "string"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        }
+      },
+      "required": [
+        "qualifier",
+        "value"
+      ],
+      "title": "Reference",
+      "type": "object"
+    },
+    "RelatedOrder": {
+      "properties": {
+        "orderId": {
+          "title": "Orderid",
+          "type": "string"
+        },
+        "relationship": {
+          "$ref": "#/$defs/RelationshipType"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        },
+        "createdAt": {
+          "format": "date-time",
+          "title": "Createdat",
+          "type": "string"
+        }
+      },
+      "required": [
+        "orderId",
+        "relationship",
+        "createdAt"
+      ],
+      "title": "RelatedOrder",
+      "type": "object"
+    },
+    "RelationshipType": {
+      "enum": [
+        "SAME_INTERCHANGE",
+        "SPLIT_FROM",
+        "SPLIT_INTO",
+        "BACKORDER_OF",
+        "REPLACES",
+        "REPLACED_BY",
+        "CHANGE_OF",
+        "DUPLICATE_OF"
+      ],
+      "title": "RelationshipType",
+      "type": "string"
+    },
+    "RoiTags": {
+      "properties": {
+        "sourceChannel": {
+          "$ref": "#/$defs/SourceChannel"
+        },
+        "touchless": {
+          "default": true,
+          "title": "Touchless",
+          "type": "boolean"
+        },
+        "touchCount": {
+          "default": 0,
+          "title": "Touchcount",
+          "type": "integer"
+        },
+        "manualTouches": {
+          "items": {
+            "$ref": "#/$defs/ManualTouch"
+          },
+          "title": "Manualtouches",
+          "type": "array"
+        },
+        "exceptionReasonCodes": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Exceptionreasoncodes",
+          "type": "array"
+        },
+        "stageTimestamps": {
+          "$ref": "#/$defs/StageTimestamps"
+        },
+        "acknowledgmentTimestamps": {
+          "$ref": "#/$defs/AckTimestamps"
+        },
+        "cycleTimes": {
+          "$ref": "#/$defs/CycleTimes"
+        },
+        "chargebackRisk": {
+          "description": "LATE_855, LATE_856, ASN_MISMATCH ...",
+          "items": {
+            "type": "string"
+          },
+          "title": "Chargebackrisk",
+          "type": "array"
+        },
+        "registeredConsumers": {
+          "description": "Output-port consumers that received the order",
+          "items": {
+            "type": "string"
+          },
+          "title": "Registeredconsumers",
+          "type": "array"
+        }
+      },
+      "required": [
+        "sourceChannel"
+      ],
+      "title": "RoiTags",
+      "type": "object"
+    },
+    "RuleResult": {
+      "properties": {
+        "ruleId": {
+          "description": "DQ-001 .. DQ-011",
+          "title": "Ruleid",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "passed": {
+          "title": "Passed",
+          "type": "boolean"
+        },
+        "severity": {
+          "$ref": "#/$defs/Severity",
+          "default": "ERROR"
+        },
+        "message": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Message"
+        },
+        "lineNumber": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Linenumber"
+        },
+        "field": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Field"
+        }
+      },
+      "required": [
+        "ruleId",
+        "name",
+        "passed"
+      ],
+      "title": "RuleResult",
+      "type": "object"
+    },
+    "Severity": {
+      "enum": [
+        "ERROR",
+        "WARNING",
+        "INFO"
+      ],
+      "title": "Severity",
+      "type": "string"
+    },
+    "Shipment": {
+      "properties": {
+        "shipmentId": {
+          "title": "Shipmentid",
+          "type": "string"
+        },
+        "asnNumber": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "856 BSN02 shipment identification",
+          "title": "Asnnumber"
+        },
+        "erpPackingSlipId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Erppackingslipid"
+        },
+        "carrierScac": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Carrierscac"
+        },
+        "carrierName": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Carriername"
+        },
+        "trackingNumber": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Trackingnumber"
+        },
+        "billOfLading": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Billoflading"
+        },
+        "proNumber": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pronumber"
+        },
+        "trailerNumber": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Trailernumber"
+        },
+        "sealNumber": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sealnumber"
+        },
+        "shipFromWarehouse": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Shipfromwarehouse"
+        },
+        "shippedAt": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Shippedat"
+        },
+        "estimatedDeliveryAt": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Estimateddeliveryat"
+        },
+        "deliveredAt": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Deliveredat"
+        },
+        "status": {
+          "default": "IN_TRANSIT",
+          "enum": [
+            "PLANNED",
+            "IN_TRANSIT",
+            "DELIVERED",
+            "EXCEPTION"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "sscc": {
+          "description": "GS1 SSCC pallet labels",
+          "items": {
+            "type": "string"
+          },
+          "title": "Sscc",
+          "type": "array"
+        },
+        "temperatureLogRef": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Temperaturelogref"
+        },
+        "proofOfDelivery": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ProofOfDelivery"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "lines": {
+          "items": {
+            "$ref": "#/$defs/ShipmentLine"
+          },
+          "title": "Lines",
+          "type": "array"
+        }
+      },
+      "required": [
+        "shipmentId"
+      ],
+      "title": "Shipment",
+      "type": "object"
+    },
+    "ShipmentLine": {
+      "properties": {
+        "lineNumber": {
+          "title": "Linenumber",
+          "type": "integer"
+        },
+        "itemNumber": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Itemnumber"
+        },
+        "quantity": {
+          "title": "Quantity",
+          "type": "string"
+        },
+        "uom": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Uom"
+        },
+        "lots": {
+          "items": {
+            "$ref": "#/$defs/LotAllocation"
+          },
+          "title": "Lots",
+          "type": "array"
+        }
+      },
+      "required": [
+        "lineNumber",
+        "quantity"
+      ],
+      "title": "ShipmentLine",
+      "type": "object"
+    },
+    "ShippingInstructions": {
+      "properties": {
+        "deliveryMode": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "D365 mode of delivery, e.g. TRUCK-REEFER",
+          "title": "Deliverymode"
+        },
+        "transportResponsibility": {
+          "default": "SUPPLIER_DELIVERED",
+          "enum": [
+            "SUPPLIER_DELIVERED",
+            "CUSTOMER_PICKUP",
+            "THIRD_PARTY"
+          ],
+          "title": "Transportresponsibility",
+          "type": "string"
+        },
+        "carrierScac": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Standard Carrier Alpha Code (TD503)",
+          "title": "Carrierscac"
+        },
+        "carrierName": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Carriername"
+        },
+        "serviceLevel": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Servicelevel"
+        },
+        "routing": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Routing"
+        },
+        "shipFromSite": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Shipfromsite"
+        },
+        "shipFromWarehouse": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Shipfromwarehouse"
+        },
+        "temperature": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TemperatureRequirement"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "appointmentRequired": {
+          "default": false,
+          "title": "Appointmentrequired",
+          "type": "boolean"
+        },
+        "palletType": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pallettype"
+        },
+        "specialInstructions": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Specialinstructions"
+        }
+      },
+      "title": "ShippingInstructions",
+      "type": "object"
+    },
+    "SourceChannel": {
+      "enum": [
+        "EDI",
+        "EMAIL",
+        "PORTAL",
+        "MANUAL",
+        "PARTNER_API"
+      ],
+      "title": "SourceChannel",
+      "type": "string"
+    },
+    "SourceDocument": {
+      "properties": {
+        "documentType": {
+          "$ref": "#/$defs/SourceDocumentType"
+        },
+        "documentId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Pointer to the stored raw document (documents API / bronze)",
+          "title": "Documentid"
+        },
+        "reference": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Channel reference: email Message-ID, file name, portal session",
+          "title": "Reference"
+        },
+        "senderId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "ISA06 / email sender / partner client id",
+          "title": "Senderid"
+        },
+        "receiverId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "ISA08",
+          "title": "Receiverid"
+        },
+        "interchangeControlNumber": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "ISA13",
+          "title": "Interchangecontrolnumber"
+        },
+        "groupControlNumber": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "GS06",
+          "title": "Groupcontrolnumber"
+        },
+        "transactionSetControlNumber": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "ST02",
+          "title": "Transactionsetcontrolnumber"
+        },
+        "x12Version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "GS08, e.g. 004010",
+          "title": "X12Version"
+        },
+        "receivedAt": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Receivedat"
+        }
+      },
+      "required": [
+        "documentType"
+      ],
+      "title": "SourceDocument",
+      "type": "object"
+    },
+    "SourceDocumentType": {
+      "enum": [
+        "X12_850",
+        "X12_860",
+        "EMAIL_MESSAGE",
+        "PDF",
+        "SPREADSHEET",
+        "PORTAL_FORM",
+        "PARTNER_JSON"
+      ],
+      "title": "SourceDocumentType",
+      "type": "string"
+    },
+    "SourceInfo": {
+      "properties": {
+        "channel": {
+          "$ref": "#/$defs/SourceChannel"
+        },
+        "channelDetail": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "e.g. VAN name, mailbox, partner platform",
+          "title": "Channeldetail"
+        },
+        "receivedAt": {
+          "format": "date-time",
+          "title": "Receivedat",
+          "type": "string"
+        },
+        "sourceDocument": {
+          "$ref": "#/$defs/SourceDocument"
+        },
+        "extraction": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ExtractionInfo"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "submittedBy": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Actor"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "channel",
+        "receivedAt",
+        "sourceDocument"
+      ],
+      "title": "SourceInfo",
+      "type": "object"
+    },
+    "StageTimestamps": {
+      "properties": {
+        "received": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Received"
+        },
+        "ingested": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ingested"
+        },
+        "validated": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Validated"
+        },
+        "enriched": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Enriched"
+        },
+        "published": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Published"
+        },
+        "submittedToErp": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Submittedtoerp"
+        },
+        "erpCreated": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Erpcreated"
+        },
+        "released": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Released"
+        },
+        "picked": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Picked"
+        },
+        "packed": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Packed"
+        },
+        "shipped": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Shipped"
+        },
+        "delivered": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Delivered"
+        },
+        "invoiced": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Invoiced"
+        },
+        "closed": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Closed"
+        },
+        "cancelled": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cancelled"
+        }
+      },
+      "title": "StageTimestamps",
+      "type": "object"
+    },
+    "StatusCategory": {
+      "enum": [
+        "RECEIVED",
+        "ACTION_REQUIRED",
+        "CONFIRMED",
+        "IN_FULFILLMENT",
+        "SHIPPED",
+        "DELIVERED",
+        "INVOICED",
+        "CLOSED",
+        "CANCELLED"
+      ],
+      "title": "StatusCategory",
+      "type": "string"
+    },
+    "TaxAmount": {
+      "properties": {
+        "taxType": {
+          "default": "SALES",
+          "title": "Taxtype",
+          "type": "string"
+        },
+        "jurisdiction": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Jurisdiction"
+        },
+        "rate": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rate"
+        },
+        "amount": {
+          "title": "Amount",
+          "type": "string"
+        }
+      },
+      "required": [
+        "amount"
+      ],
+      "title": "TaxAmount",
+      "type": "object"
+    },
+    "TemperatureRequirement": {
+      "properties": {
+        "zone": {
+          "$ref": "#/$defs/TemperatureZone",
+          "default": "REFRIGERATED"
+        },
+        "minCelsius": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Mincelsius"
+        },
+        "maxCelsius": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Maxcelsius"
+        }
+      },
+      "title": "TemperatureRequirement",
+      "type": "object"
+    },
+    "TemperatureZone": {
+      "enum": [
+        "FROZEN",
+        "REFRIGERATED",
+        "AMBIENT"
+      ],
+      "title": "TemperatureZone",
+      "type": "string"
+    },
+    "Tier": {
+      "enum": [
+        "TIER1",
+        "TIER2",
+        "TIER3"
+      ],
+      "title": "Tier",
+      "type": "string"
+    },
+    "Totals": {
+      "properties": {
+        "lineCount": {
+          "default": 0,
+          "title": "Linecount",
+          "type": "integer"
+        },
+        "totalQuantity": {
+          "default": "0",
+          "title": "Totalquantity",
+          "type": "string"
+        },
+        "subtotal": {
+          "default": "0",
+          "title": "Subtotal",
+          "type": "string"
+        },
+        "allowances": {
+          "default": "0",
+          "title": "Allowances",
+          "type": "string"
+        },
+        "charges": {
+          "default": "0",
+          "title": "Charges",
+          "type": "string"
+        },
+        "tax": {
+          "default": "0",
+          "title": "Tax",
+          "type": "string"
+        },
+        "grandTotal": {
+          "default": "0",
+          "title": "Grandtotal",
+          "type": "string"
+        },
+        "currency": {
+          "default": "USD",
+          "title": "Currency",
+          "type": "string"
+        },
+        "totalWeightLb": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Totalweightlb"
+        }
+      },
+      "title": "Totals",
+      "type": "object"
+    }
+  },
+  "description": "Canonical Sales Order - the published record of the Sales Order data product.",
+  "properties": {
+    "schemaVersion": {
+      "default": "1.0.0",
+      "title": "Schemaversion",
+      "type": "string"
+    },
+    "orderId": {
+      "description": "Data product order id: SO-YYYYMMDD-XXXXXXXX",
+      "title": "Orderid",
+      "type": "string"
+    },
+    "orderGroupId": {
+      "description": "Groups orders that arrived together (one interchange/email) or were split/replaced",
+      "title": "Ordergroupid",
+      "type": "string"
+    },
+    "version": {
+      "default": 1,
+      "description": "Optimistic concurrency version; increments on every change",
+      "title": "Version",
+      "type": "integer"
+    },
+    "orderType": {
+      "$ref": "#/$defs/OrderType",
+      "default": "STANDARD"
+    },
+    "purpose": {
+      "$ref": "#/$defs/OrderPurpose",
+      "default": "ORIGINAL"
+    },
+    "status": {
+      "$ref": "#/$defs/OrderStatus"
+    },
+    "statusCategory": {
+      "$ref": "#/$defs/StatusCategory"
+    },
+    "statusReason": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Statusreason"
+    },
+    "statusUpdatedAt": {
+      "format": "date-time",
+      "title": "Statusupdatedat",
+      "type": "string"
+    },
+    "source": {
+      "$ref": "#/$defs/SourceInfo"
+    },
+    "purchaseOrder": {
+      "$ref": "#/$defs/PurchaseOrderReference"
+    },
+    "erp": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ErpReference"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "parties": {
+      "$ref": "#/$defs/Parties"
+    },
+    "dates": {
+      "$ref": "#/$defs/OrderDates"
+    },
+    "commercial": {
+      "$ref": "#/$defs/Commercial"
+    },
+    "shipping": {
+      "$ref": "#/$defs/ShippingInstructions"
+    },
+    "lines": {
+      "items": {
+        "$ref": "#/$defs/OrderLine"
+      },
+      "minItems": 0,
+      "title": "Lines",
+      "type": "array"
+    },
+    "allowancesCharges": {
+      "items": {
+        "$ref": "#/$defs/AllowanceCharge"
+      },
+      "title": "Allowancescharges",
+      "type": "array"
+    },
+    "totals": {
+      "$ref": "#/$defs/Totals"
+    },
+    "references": {
+      "items": {
+        "$ref": "#/$defs/Reference"
+      },
+      "title": "References",
+      "type": "array"
+    },
+    "notes": {
+      "items": {
+        "$ref": "#/$defs/Note"
+      },
+      "title": "Notes",
+      "type": "array"
+    },
+    "shipments": {
+      "items": {
+        "$ref": "#/$defs/Shipment"
+      },
+      "title": "Shipments",
+      "type": "array"
+    },
+    "invoices": {
+      "items": {
+        "$ref": "#/$defs/Invoice"
+      },
+      "title": "Invoices",
+      "type": "array"
+    },
+    "acknowledgments": {
+      "items": {
+        "$ref": "#/$defs/Acknowledgment"
+      },
+      "title": "Acknowledgments",
+      "type": "array"
+    },
+    "exceptions": {
+      "items": {
+        "$ref": "#/$defs/OrderException"
+      },
+      "title": "Exceptions",
+      "type": "array"
+    },
+    "dataQuality": {
+      "$ref": "#/$defs/DataQuality"
+    },
+    "roi": {
+      "$ref": "#/$defs/RoiTags"
+    },
+    "relatedOrders": {
+      "items": {
+        "$ref": "#/$defs/RelatedOrder"
+      },
+      "title": "Relatedorders",
+      "type": "array"
+    },
+    "orderHistory": {
+      "description": "Complete, ordered lifecycle of this order",
+      "items": {
+        "$ref": "#/$defs/OrderHistoryEntry"
+      },
+      "title": "Orderhistory",
+      "type": "array"
+    },
+    "audit": {
+      "$ref": "#/$defs/AuditInfo"
+    },
+    "extensions": {
+      "additionalProperties": true,
+      "description": "Namespaced, non-contract attributes",
+      "title": "Extensions",
+      "type": "object"
+    }
+  },
+  "required": [
+    "orderId",
+    "orderGroupId",
+    "status",
+    "statusCategory",
+    "statusUpdatedAt",
+    "source",
+    "purchaseOrder",
+    "parties",
+    "lines",
+    "roi",
+    "audit"
+  ],
+  "type": "object"
+}

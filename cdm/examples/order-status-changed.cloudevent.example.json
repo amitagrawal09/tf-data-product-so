@@ -1,0 +1,101 @@
+{
+  "specversion": "1.0",
+  "id": "532882a0-d55b-422a-916c-843228de7451",
+  "source": "/process/sales-orders",
+  "type": "tfso.salesorder.OrderStatusChanged",
+  "subject": "SO-20261113-79CAD6B0",
+  "time": "2026-11-13T17:15:26.921214Z",
+  "datacontenttype": "application/json",
+  "correlationid": "0417229a-892b-46f6-add5-1d5b18b013db",
+  "data": {
+    "orderId": "SO-20261113-79CAD6B0",
+    "orderGroupId": "OG-20261113-DA7E82C2",
+    "sequence": 13,
+    "eventType": "SHIPPED",
+    "fromStatus": "PACKED",
+    "toStatus": "SHIPPED",
+    "statusCategory": "SHIPPED",
+    "occurredAt": "2026-11-13T17:15:26.866765Z",
+    "recordedAt": "2026-11-13T17:15:26.921145Z",
+    "sourceSystem": "WMS",
+    "sourceChannel": "PORTAL",
+    "customerId": "C-1001",
+    "customerPo": "SMOKE-7A5BF0DB",
+    "erpSalesOrderId": "SO-00100001",
+    "totalAmount": "331.00",
+    "currency": "USD",
+    "roi": {
+      "touchless": true,
+      "touchCount": 0,
+      "exceptionReasonCodes": [],
+      "stageTimestamps": {
+        "received": "2026-11-13T17:15:26.254740Z",
+        "ingested": "2026-11-13T17:15:26.264216Z",
+        "validated": "2026-11-13T17:15:26.311056Z",
+        "enriched": "2026-11-13T17:15:26.321951Z",
+        "published": "2026-11-13T17:15:26.322373Z",
+        "submittedToErp": "2026-11-13T17:15:26.322443Z",
+        "erpCreated": "2026-11-13T17:15:26.377917Z",
+        "released": "2026-11-13T17:15:26.864755Z",
+        "picked": "2026-11-13T17:15:26.864781Z",
+        "packed": "2026-11-13T17:15:26.864790Z",
+        "shipped": "2026-11-13T17:15:26.866765Z"
+      },
+      "acknowledgmentTimestamps": {},
+      "cycleTimes": {
+        "receiptToErpMinutes": 0.0,
+        "receiptToShipHours": 0.0
+      },
+      "chargebackRisk": []
+    },
+    "historyEntry": {
+      "eventId": "hist-0c290624-8044-49e5-89e0-9b2f15e6d343",
+      "orderId": "SO-20261113-79CAD6B0",
+      "orderGroupId": "OG-20261113-DA7E82C2",
+      "sequence": 13,
+      "eventType": "SHIPPED",
+      "occurredAt": "2026-11-13T17:15:26.866765Z",
+      "recordedAt": "2026-11-13T17:15:26.921145Z",
+      "fromStatus": "PACKED",
+      "toStatus": "SHIPPED",
+      "statusCategory": "SHIPPED",
+      "tier": "TIER3",
+      "sourceSystem": "WMS",
+      "actor": {
+        "type": "SYSTEM",
+        "id": "WMS"
+      },
+      "correlationId": "0417229a-892b-46f6-add5-1d5b18b013db",
+      "causationId": "evt-626f7940-bab6-4a7e-9610-f604ef4fc981",
+      "externalEventId": "evt-626f7940-bab6-4a7e-9610-f604ef4fc981",
+      "message": "Shipment SHP-500001 via Valley Reefer Express, tracking VLYX500001199",
+      "lineChanges": [
+        {
+          "lineNumber": 1,
+          "field": "quantities.shipped",
+          "fromValue": null,
+          "toValue": "10.0"
+        },
+        {
+          "lineNumber": 1,
+          "field": "status",
+          "fromValue": "PACKED",
+          "toValue": "SHIPPED"
+        },
+        {
+          "lineNumber": 2,
+          "field": "quantities.shipped",
+          "fromValue": null,
+          "toValue": "4.0"
+        },
+        {
+          "lineNumber": 2,
+          "field": "status",
+          "fromValue": "PACKED",
+          "toValue": "SHIPPED"
+        }
+      ],
+      "elapsedSincePreviousSeconds": 0.013
+    }
+  }
+}

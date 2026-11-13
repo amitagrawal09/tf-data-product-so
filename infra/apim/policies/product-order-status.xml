@@ -1,0 +1,30 @@
+<!--
+  "Order Status API" product: read-only access to the Process API.
+  Consumers (customer service tools, Databricks, partners) get GET operations only.
+-->
+<policies>
+  <inbound>
+    <base />
+    <choose>
+      <when condition='@(context.Request.Method != "GET" &amp;&amp; context.Request.Method != "OPTIONS")'>
+        <return-response>
+          <set-status code="405" reason="Method Not Allowed" />
+          <set-header name="Content-Type" exists-action="override">
+            <value>application/problem+json</value>
+          </set-header>
+          <set-body>{"type":"about:blank","title":"Method Not Allowed","status":405,"detail":"The Order Status API product is read-only (GET)."}</set-body>
+        </return-response>
+      </when>
+    </choose>
+    <quota calls="100000" renewal-period="86400" />
+  </inbound>
+  <backend>
+    <base />
+  </backend>
+  <outbound>
+    <base />
+  </outbound>
+  <on-error>
+    <base />
+  </on-error>
+</policies>
