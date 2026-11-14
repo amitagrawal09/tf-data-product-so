@@ -361,6 +361,49 @@ bicep_deploy() {
   die "Bicep deployment failed after 3 attempts"
 }
 
+# Resource providers must be registered once per subscription before their resources can be created.
+AZURE_PROVIDERS=(Microsoft.App Microsoft.ApiManagement Microsoft.ContainerRegistry Microsoft.ServiceBus
+                 Microsoft.EventHub Microsoft.DBforPostgreSQL Microsoft.KeyVault Microsoft.CognitiveServices
+                 Microsoft.OperationalInsights Microsoft.Insights Microsoft.Storage Microsoft.ManagedIdentity)
+
+register_providers() {
+  local p state pending=() denied=()
+  for p in "${AZURE_PROVIDERS[@]}"; do
+    state="$(az provider show --namespace "$p" --query registrationState -o tsv 2>/dev/null || true)"
+    [[ "$state" == "Registered" ]] && continue
+    if az provider register --namespace "$p" --only-show-errors -o none 2>/dev/null; then
+      pending+=("$p")
+    else
+      denied+=("$p")
+    fi
+  done
+  if (( ${#denied[@]} )); then
+    die "These Azure resource providers are not registered and this identity may not register them: ${denied[*]}.
+       Ask a subscription Owner to run once (Azure Cloud Shell):
+         for p in ${denied[*]}; do az provider register -n \$p; done"
+  fi
+  if (( ${#pending[@]} )); then
+    log "Registering resource providers: ${pending[*]} (one-time per subscription, usually 1-5 min)"
+    local tries=0 unknown
+    while (( tries < 60 )); do
+      local waiting=()
+      unknown=0
+      for p in "${pending[@]}"; do
+        state="$(az provider show --namespace "$p" --query registrationState -o tsv 2>/dev/null || true)"
+        [[ -n "$state" ]] || unknown=$((unknown + 1))
+        [[ "$state" == "Registered" ]] || waiting+=("$p")
+      done
+      (( ${#waiting[@]} )) || { ok "Resource providers registered"; return 0; }
+      if (( unknown == ${#pending[@]} && tries >= 12 )); then
+        warn "Cannot read provider registration state; continuing after a 3-minute wait"
+        return 0
+      fi
+      sleep 15; tries=$((tries + 1))
+    done
+    die "Resource providers still registering after 15 min: ${waiting[*]}. Re-run the deployment in a few minutes."
+  fi
+}
+
 azure_up() {
   need az
   az account show -o none 2>/dev/null || die "Run 'az login' (and 'az account set -s <subscription>') first"
@@ -377,12 +420,7 @@ azure_up() {
   step "Deploying environment '${ENVIRONMENT}' to subscription '${sub_name}', resource group '${RG}' (${LOCATION})"
   az config set bicep.use_binary_from_path=false --only-show-errors >/dev/null 2>&1 || true
   az bicep install --only-show-errors >/dev/null 2>&1 || az bicep upgrade --only-show-errors >/dev/null 2>&1 || true
-  local provider
-  for provider in Microsoft.App Microsoft.ApiManagement Microsoft.ContainerRegistry Microsoft.ServiceBus \
-                  Microsoft.EventHub Microsoft.DBforPostgreSQL Microsoft.KeyVault Microsoft.CognitiveServices \
-                  Microsoft.OperationalInsights Microsoft.Insights Microsoft.Storage Microsoft.ManagedIdentity; do
-    az provider register --namespace "$provider" --only-show-errors -o none || true
-  done
+  register_providers
 
   load_state
   DEPLOYMENT_NAME="tfso-${ENVIRONMENT}"

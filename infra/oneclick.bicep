@@ -78,10 +78,72 @@ resource rg 'Microsoft.Resources/resourceGroups@2022-09-01' = {
   tags: tags
 }
 
+module identity 'oneclick/identity.bicep' = {
+  name: 'tfso-oneclick-identity-${environment}'
+  scope: rg
+  params: {
+    prefix: prefix
+    environment: environment
+    location: location
+    tags: tags
+  }
+}
+
+// Must match AZURE_PROVIDERS in deploy.sh
+var providerNamespaces = [
+  'Microsoft.App'
+  'Microsoft.ApiManagement'
+  'Microsoft.ContainerRegistry'
+  'Microsoft.ServiceBus'
+  'Microsoft.EventHub'
+  'Microsoft.DBforPostgreSQL'
+  'Microsoft.KeyVault'
+  'Microsoft.CognitiveServices'
+  'Microsoft.OperationalInsights'
+  'Microsoft.Insights'
+  'Microsoft.Storage'
+  'Microsoft.ManagedIdentity'
+]
+
+// Least-privilege custom role: register resource providers in this subscription (and nothing else).
+// The deployer identity needs it because Container Apps, API Management, Cognitive Services, ... must be
+// registered once per subscription before first use.
+resource providerRegistrar 'Microsoft.Authorization/roleDefinitions@2022-04-01' = {
+  name: guid(subscription().id, 'tfso-resource-provider-registrar')
+  properties: {
+    roleName: 'TFSO resource provider registrar (${subscription().subscriptionId})'
+    description: 'Register Azure resource providers. Used by the Sales Order data product one-click deployment.'
+    type: 'CustomRole'
+    permissions: [
+      {
+        actions: concat(map(providerNamespaces, ns => '${ns}/register/action'), [
+          'Microsoft.Resources/subscriptions/read'
+          'Microsoft.Resources/subscriptions/providers/read'
+        ])
+        notActions: []
+      }
+    ]
+    assignableScopes: [ subscription().id ]
+  }
+}
+
+resource registrarAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(subscription().id, rgName, 'tfso-resource-provider-registrar')
+  properties: {
+    roleDefinitionId: providerRegistrar.id
+    principalId: identity.outputs.principalId
+    principalType: 'ServicePrincipal'
+    description: 'One-click deployer may register resource providers'
+  }
+}
+
 module deployer 'oneclick/deployer.bicep' = {
   name: 'tfso-oneclick-${environment}'
   scope: rg
   params: {
+    deployerIdentityId: identity.outputs.id
+    deployerPrincipalId: identity.outputs.principalId
+    prerequisiteAssignmentIds: [ identity.outputs.ownerAssignmentId, registrarAssignment.id ]
     prefix: prefix
     environment: environment
     location: location
