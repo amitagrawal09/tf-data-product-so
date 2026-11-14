@@ -7,25 +7,65 @@ log() { printf '[oneclick %s] %s\n' "$(date -u +%H:%M:%S)" "$*"; }
 
 : "${REPO_URL:?}" "${REPO_REF:?}" "${RG:?}" "${ENVIRONMENT:?}"
 
+# ---------------------------------------------------------------- tools
+# The Azure CLI deployment-script image is minimal (no curl/tar/jq in recent versions). Everything this script
+# needs is done with python3 (always present: the Azure CLI runs on it); curl is installed best-effort for deploy.sh.
+PY="$(command -v python3 || command -v python || true)"
+[[ -n "$PY" ]] || { echo "ONE-CLICK DEPLOYMENT FAILED: python3 not found in the Azure CLI container" >&2; exit 1; }
+if ! command -v curl >/dev/null 2>&1; then
+  if tdnf install -y curl >/dev/null 2>&1 || apk add --no-cache curl >/dev/null 2>&1 \
+     || { apt-get update -qq && apt-get install -y -qq curl; } >/dev/null 2>&1; then
+    log "installed curl"
+  else
+    log "curl unavailable - deploy.sh uses its python fallback"
+  fi
+fi
+
 # ---------------------------------------------------------------- source code
 owner_repo="${REPO_URL#https://github.com/}"
 owner_repo="${owner_repo%.git}"
 owner_repo="${owner_repo%/}"
 work="$(mktemp -d)"
 log "Downloading ${owner_repo}@${REPO_REF}"
-curl_args=(-fsSL --retry 5 --retry-delay 5 -H "Accept: application/vnd.github+json" -o "$work/src.tgz")
-if [[ -n "${REPO_TOKEN:-}" ]]; then
-  curl_args+=(-H "Authorization: Bearer ${REPO_TOKEN}")
-fi
-if ! curl "${curl_args[@]}" "https://api.github.com/repos/${owner_repo}/tarball/${REPO_REF}"; then
-  log "ERROR: could not download the repository. For a private repository supply gitHubToken (read access to contents)."
+if ! "$PY" - "$owner_repo" "$REPO_REF" "$work/src" <<'PYEOF'
+import io, os, sys, tarfile, time, urllib.request
+repo, ref, dest = sys.argv[1:4]
+url = f"https://api.github.com/repos/{repo}/tarball/{ref}"
+headers = {"Accept": "application/vnd.github+json", "User-Agent": "tfso-oneclick"}
+if os.environ.get("REPO_TOKEN"):
+    headers["Authorization"] = "Bearer " + os.environ["REPO_TOKEN"]
+data = None
+for attempt in range(5):
+    try:
+        with urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=120) as r:
+            data = r.read()
+        break
+    except Exception as exc:  # noqa: BLE001
+        print(f"download attempt {attempt + 1} failed: {exc}", file=sys.stderr)
+        time.sleep(5)
+if data is None:
+    sys.exit(1)
+os.makedirs(dest, exist_ok=True)
+with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as tf:
+    members = []
+    for m in tf.getmembers():
+        parts = m.name.split("/", 1)
+        if len(parts) < 2 or not parts[1]:
+            continue
+        m.name = parts[1]                       # strip the top-level "<owner>-<repo>-<sha>/" folder
+        if m.name.startswith("/") or ".." in m.name.split("/"):
+            continue
+        members.append(m)
+    tf.extractall(dest, members=members)
+print(f"extracted {len(members)} entries")
+PYEOF
+then
+  echo "ONE-CLICK DEPLOYMENT FAILED: could not download ${owner_repo}@${REPO_REF}. For a private repository supply gitHubToken (read access to contents)." >&2
   exit 1
 fi
-mkdir -p "$work/src"
-tar -xzf "$work/src.tgz" -C "$work/src" --strip-components=1
 cd "$work/src"
 chmod +x deploy.sh
-log "Source ready ($(du -sh . | cut -f1))"
+log "Source ready"
 
 # ---------------------------------------------------------------- wait for the Owner role assignment
 for i in $(seq 1 30); do
@@ -52,12 +92,27 @@ fi
 # ---------------------------------------------------------------- deploy
 export ASSUME_YES=true PYTHON="${PYTHON:-python3}"
 log "Running ./deploy.sh azure (environment=${ENVIRONMENT}, rg=${RG}, apim=${APIM_SKU:-Developer})"
-./deploy.sh azure
+set +e
+./deploy.sh azure 2>&1 | tee "$work/deploy.log"
+status=${PIPESTATUS[0]}
+set -e
+if [[ $status -ne 0 ]]; then
+  # stderr becomes the deployment script's error message in the portal - put the cause there.
+  {
+    echo "ONE-CLICK DEPLOYMENT FAILED (deploy.sh exit ${status}). Last lines of the deployment log:"
+    sed 's/\x1b\[[0-9;]*m//g' "$work/deploy.log" | grep -v '^\s*$' | tail -25
+    echo "Full log: resource group ${RG} > ds-${PREFIX:-tfso}-${ENVIRONMENT}-deploy (Show hidden types) > Logs"
+  } >&2
+  exit "$status"
+fi
 
 # ---------------------------------------------------------------- outputs for the template
-outputs="$(az deployment group show -g "$RG" -n "tfso-${ENVIRONMENT}" --query properties.outputs -o json)"
-console="$(echo "$outputs" | jq -r '.staticWebsiteUrl.value // ""')"
-gateway="$(echo "$outputs" | jq -r '.apimGatewayUrl.value // ""')"
-jq -n --arg c "$console" --arg g "${gateway%/}" --arg r "$RG" \
-  '{consoleUrl: $c, apiGatewayUrl: $g, resourceGroup: $r}' >"$AZ_SCRIPTS_OUTPUT_PATH"
-log "Done. Console: ${console}  API gateway: ${gateway}"
+az deployment group show -g "$RG" -n "tfso-${ENVIRONMENT}" --query properties.outputs -o json >"$work/outputs.json"
+"$PY" - "$work/outputs.json" "$RG" "$AZ_SCRIPTS_OUTPUT_PATH" <<'PYEOF'
+import json, sys
+outs = json.load(open(sys.argv[1]))
+val = lambda k: (outs.get(k) or {}).get("value") or ""
+result = {"consoleUrl": val("staticWebsiteUrl"), "apiGatewayUrl": val("apimGatewayUrl").rstrip("/"), "resourceGroup": sys.argv[2]}
+json.dump(result, open(sys.argv[3], "w"))
+print(f"Done. Console: {result['consoleUrl']}  API gateway: {result['apiGatewayUrl']}")
+PYEOF

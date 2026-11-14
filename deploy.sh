@@ -86,6 +86,20 @@ EOF
 
 need() { command -v "$1" >/dev/null 2>&1 || die "'$1' is required but not installed"; }
 
+# http_ok <url> [timeout-seconds]: true when the URL answers 2xx/3xx. Uses curl, else python (minimal containers).
+http_ok() {
+  local url="$1" t="${2:-3}"
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsS -o /dev/null --max-time "$t" "$url" 2>/dev/null
+  else
+    "$PYTHON" -c 'import sys,urllib.request
+try:
+    urllib.request.urlopen(sys.argv[1], timeout=float(sys.argv[2])); sys.exit(0)
+except Exception:
+    sys.exit(1)' "$url" "$t"
+  fi
+}
+
 confirm() {
   local prompt="$1"
   [[ "$ASSUME_YES" == "true" ]] && return 0
@@ -96,7 +110,7 @@ confirm() {
 wait_http() {
   # wait_http <url> <label> [timeout-seconds]
   local url="$1" label="$2" timeout="${3:-90}" i=0
-  until curl -fsS -o /dev/null --max-time 3 "$url"; do
+  until http_ok "$url" 3; do
     i=$((i + 1))
     if (( i >= timeout )); then
       warn "$label did not become healthy at $url within ${timeout}s"
@@ -174,7 +188,7 @@ local_stop() {
       busy=false
       for svc in "${LOCAL_SERVICES[@]}"; do
         port="${svc##*:}"
-        if curl -fsS -o /dev/null --max-time 1 "http://localhost:${port}/health" 2>/dev/null; then busy=true; fi
+        if http_ok "http://localhost:${port}/health" 1; then busy=true; fi
       done
       [[ "$busy" == "false" ]] && break
       sleep 0.5; tries=$((tries + 1))
@@ -206,7 +220,7 @@ local_up() {
   local entry name port
   for entry in "${LOCAL_SERVICES[@]}"; do
     name="${entry%%:*}"; port="${entry##*:}"
-    if curl -fsS -o /dev/null --max-time 1 "http://localhost:${port}/health" 2>/dev/null; then
+    if http_ok "http://localhost:${port}/health" 1; then
       die "port ${port} is already serving something; run './deploy.sh local-stop' or free the port"
     fi
     case "$name" in
@@ -349,7 +363,6 @@ bicep_deploy() {
 
 azure_up() {
   need az
-  need curl
   az account show -o none 2>/dev/null || die "Run 'az login' (and 'az account set -s <subscription>') first"
   [[ -n "$APIM_PUBLISHER_EMAIL" ]] || die "APIM_PUBLISHER_EMAIL is required, e.g. APIM_PUBLISHER_EMAIL=owner@example.com ./deploy.sh azure"
   [[ "$PREFIX" =~ ^[a-z][a-z0-9]{1,7}$ ]] || die "PREFIX must be 2-8 lowercase letters/digits starting with a letter"
