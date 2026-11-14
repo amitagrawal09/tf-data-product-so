@@ -150,7 +150,7 @@ If you move the solution to another branch or repository, update the button URL 
   - **Front end:** a storage static website hosting the Order Operations Console.
 - **Options B and C only:**
   - `id-<prefix>-<env>-deployer`: the deployer identity, with Owner on the resource group.
-  - `ds-<prefix>-<env>-deploy`: the deployment script. Its logs are under **Resource group → ds-…-deploy → Logs**. The container is cleaned up on success and kept for one day on failure.
+  - `ds-<prefix>-<env>-deploy`: the deployment script. Its logs are under **Resource group → ds-…-deploy → Logs**. The container is cleaned up on success and kept for one day (P1D) on failure.
 
 ## Troubleshooting
 

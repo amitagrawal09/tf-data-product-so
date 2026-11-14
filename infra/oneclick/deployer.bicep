@@ -79,7 +79,7 @@ resource deploy 'Microsoft.Resources/deploymentScripts@2023-08-01' = {
   properties: {
     azCliVersion: '2.63.0'
     timeout: 'PT2H'
-    retentionInterval: 'PT1D'
+    retentionInterval: 'P1D'
     cleanupPreference: 'OnSuccess'
     forceUpdateTag: forceUpdateTag
     environmentVariables: concat(baseEnv, tokenEnv, d365Env)
