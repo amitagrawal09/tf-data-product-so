@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.49.2.45890",
-      "templateHash": "16722147816067599728"
+      "templateHash": "9623260204605459038"
     }
   },
   "parameters": {
@@ -211,7 +211,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.49.2.45890",
-              "templateHash": "17949832780290881294"
+              "templateHash": "5350707302584741701"
             }
           },
           "parameters": {
@@ -311,7 +311,7 @@
               "properties": {
                 "azCliVersion": "2.63.0",
                 "timeout": "PT2H",
-                "retentionInterval": "PT1D",
+                "retentionInterval": "P1D",
                 "cleanupPreference": "OnSuccess",
                 "forceUpdateTag": "[parameters('forceUpdateTag')]",
                 "environmentVariables": "[concat(createArray(createObject('name', 'PREFIX', 'value', parameters('prefix')), createObject('name', 'ENVIRONMENT', 'value', parameters('environment')), createObject('name', 'LOCATION', 'value', parameters('location')), createObject('name', 'RG', 'value', resourceGroup().name), createObject('name', 'APIM_PUBLISHER_EMAIL', 'value', parameters('apimPublisherEmail')), createObject('name', 'APIM_SKU', 'value', parameters('apimSku')), createObject('name', 'REPO_URL', 'value', parameters('repositoryUrl')), createObject('name', 'REPO_REF', 'value', parameters('repositoryRef')), createObject('name', 'LOAD_DEMO_DATA', 'value', if(parameters('loadDemoData'), 'true', 'false')), createObject('name', 'SKIP_SMOKE', 'value', if(parameters('runSmokeTest'), 'false', 'true')), createObject('name', 'D365_COMPANY', 'value', parameters('d365Company')), createObject('name', 'DEPLOYER_PRINCIPAL_ID', 'value', reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-{0}-{1}-deployer', parameters('prefix'), parameters('environment'))), '2023-01-31').principalId)), variables('tokenEnv'), variables('d365Env'))]",
