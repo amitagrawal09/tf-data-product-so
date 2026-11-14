@@ -9,6 +9,7 @@
     .\deploy.ps1 local-stop    stop the local services
     .\deploy.ps1 test          run the automated test suite (pytest)
     .\deploy.ps1 smoke [URL]   run the smoke test against an API base URL (default http://localhost:8080/api)
+    .\deploy.ps1 demo-data     load demo orders across all regions / channels (after local)
     .\deploy.ps1 docker        docker compose (Postgres + 4 containers) + smoke test
     .\deploy.ps1 docker-down   stop the compose stack
     .\deploy.ps1 azure         runs deploy.sh azure through WSL or Git Bash (the Azure flow is bash-only)
@@ -227,6 +228,8 @@ switch ($Command.ToLower()) {
   "local"       { Start-Local }
   "local-stop"  { Stop-Local }
   "test"        { Ensure-Python; Step "Running tests"; & $VenvPy -m pytest -q -p no:logging @Rest; exit $LASTEXITCODE }
+  "demo-data"   { Ensure-Python; $u = if ($Rest) { $Rest[0] } else { "http://localhost:$(($Services | Where-Object { $_.Name -eq 'gateway' }).Port)/api" }
+                  Step "Loading demo orders across all regions"; & $VenvPy -m tfso.tools.seed_demo --base $u --api-key $ApiKey; exit $LASTEXITCODE }
   "smoke"       { Ensure-Python; $u = if ($Rest) { $Rest[0] } else { "http://localhost:$(($Services | Where-Object { $_.Name -eq 'gateway' }).Port)/api" }; Invoke-Smoke $u }
   "docker"      {
     if (-not (Get-Command docker -ErrorAction SilentlyContinue)) { Die "Docker Desktop is required for this mode" }

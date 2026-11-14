@@ -10,6 +10,7 @@ import * as webhooks from "./views/webhooks.js";
 import * as explorer from "./views/explorer.js";
 import * as marketplace from "./views/marketplace.js";
 import * as settings from "./views/settings.js";
+import { initScope } from "./scope.js";
 
 const routes = [
   { re: /^#\/dashboard$/, nav: "dashboard", view: dashboard, title: "Dashboard" },
@@ -83,6 +84,9 @@ document.getElementById("navToggle").addEventListener("click", () => {
   document.getElementById("navToggle").setAttribute("aria-expanded", String(open));
 });
 window.addEventListener("hashchange", route);
+// Changing the operating scope re-renders the current page with the new national/regional/site filter.
+let scopeTimer = null;
+window.addEventListener("tfso:scope", () => { clearTimeout(scopeTimer); scopeTimer = setTimeout(route, 30); });
 initTheme();
 refreshEnvChip();
-route();
+initScope().finally(route);

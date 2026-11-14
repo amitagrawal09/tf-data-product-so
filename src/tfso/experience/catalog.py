@@ -95,7 +95,13 @@ STEWARD = {"name": "Customer Service data steward", "team": "Customer Service Op
 MD_OWNER = {"name": "Master data owner", "team": "Enterprise Data Management", "email": "mdm@taylorfarms.example"}
 DQ_ORDER = ["DQ-001", "DQ-002", "DQ-003", "DQ-004", "DQ-005", "DQ-006", "DQ-007", "DQ-008", "DQ-009", "DQ-010", "DQ-011"]
 
-ORDER_FILTERS = [
+REGION_IDS = ["WEST", "SOUTHWEST", "CENTRAL", "SOUTHEAST", "NORTHEAST"]
+SCOPE_FILTERS = [
+    {"name": "region", "label": "Region", "type": "enum", "values": REGION_IDS, "help": "Fulfilling region (blank = national)"},
+    {"name": "accountScope", "label": "Account scope", "type": "enum", "values": ["NATIONAL", "REGIONAL"]},
+]
+
+ORDER_FILTERS = SCOPE_FILTERS + [
     {"name": "status", "label": "Status", "type": "string", "help": "Comma separated, e.g. ACCEPTED,SHIPPED"},
     {"name": "statusCategory", "label": "Status category", "type": "string"},
     {"name": "channel", "label": "Channel", "type": "enum", "values": ["EDI", "EMAIL", "PORTAL", "MANUAL", "PARTNER_API"]},
@@ -141,6 +147,10 @@ DATASETS: list[dict[str, Any]] = [
             f("currency", "string", "ISO 4217 currency"),
             f("openExceptionCount", "integer", "Open data-quality / ERP exceptions"),
             f("touchless", "boolean", "True when no manual touch was needed (ROI tag)"),
+            f("region", "enum", "Fulfilling operating region (WEST, SOUTHWEST, CENTRAL, SOUTHEAST, NORTHEAST)"),
+            f("shipFromWarehouse", "string", "Processing site / D365 warehouse that ships the order"),
+            f("accountScope", "enum", "NATIONAL (served from several regions) or REGIONAL account"),
+            f("crossRegion", "boolean", "Sourced outside the ship-to's home region"),
             f("version", "integer", "Optimistic concurrency version"),
         ],
         "lineage": _fulfilment_lineage("Sales Orders"),
@@ -184,6 +194,7 @@ DATASETS: list[dict[str, Any]] = [
             f("agreementId", "string", "Trade agreement applied", source="D365 pricing"),
             f("lineAmount", "decimal", "Quantity × unit price"), f("lineStatus", "enum", "Line status"),
             f("requestedDeliveryDate", "date", "Requested delivery date"),
+            f("region", "enum", "Fulfilling region"), f("shipFromWarehouse", "string", "Ship-from warehouse"),
         ],
         "lineage": _fulfilment_lineage("Sales Order Lines"),
         "consumption": {"rest": [{"method": "GET", "path": "/process/v1/orders?full=true", "description": "Orders with canonical documents"}],
@@ -204,7 +215,7 @@ DATASETS: list[dict[str, Any]] = [
                     "detail": "Appended in the same transaction as the order change; also streamed as CloudEvents."},
         "retention": "7 years (immutable)", "grain": "One row per lifecycle event", "primaryKey": ["eventId"],
         "statsKey": "historyEvents", "qualityRules": [],
-        "filters": [{"name": "eventType", "label": "Event type", "type": "string", "help": "e.g. SHIPPED,INVOICED"},
+        "filters": SCOPE_FILTERS + [{"name": "eventType", "label": "Event type", "type": "string", "help": "e.g. SHIPPED,INVOICED"},
                     {"name": "sourceSystem", "label": "Source system", "type": "enum", "values": ["PROCESS-API", "D365", "WMS", "TMS", "EDI-GATEWAY", "CUSTOMER-PORTAL", "NOTIFICATION"]},
                     {"name": "orderId", "label": "Order id", "type": "string"},
                     {"name": "since", "label": "Recorded since", "type": "datetime"}],
@@ -244,7 +255,7 @@ DATASETS: list[dict[str, Any]] = [
         "owner": OWNER, "steward": STEWARD,
         "refresh": {"mode": "Event-driven (real time)", "frequency": "Continuous", "freshnessSlaSeconds": 60, "detail": "Changes as orders fail validation or are corrected."},
         "retention": "Current state (history in Order Lifecycle History)", "grain": "One row per open exception",
-        "primaryKey": ["exceptionId"], "statsKey": "openExceptionOrders", "qualityRules": DQ_ORDER, "filters": [{"name": "customerId", "label": "Customer id", "type": "string"},
+        "primaryKey": ["exceptionId"], "statsKey": "openExceptionOrders", "qualityRules": DQ_ORDER, "filters": SCOPE_FILTERS + [{"name": "customerId", "label": "Customer id", "type": "string"},
                                                                                                                 {"name": "code", "label": "Exception code", "type": "string"}],
         "schema": [
             f("exceptionId", "string", "Exception id", key=True), f("orderId", "string", "Order id"),
@@ -254,6 +265,7 @@ DATASETS: list[dict[str, Any]] = [
             f("severity", "enum", "ERROR / WARNING"), f("message", "string", "What failed"),
             f("lineNumber", "integer", "Affected line"), f("field", "string", "Affected element"),
             f("detectedAt", "timestamp", "When detected"), f("ageMinutes", "decimal", "Minutes since the order was received"),
+            f("region", "enum", "Fulfilling region"),
         ],
         "lineage": _fulfilment_lineage("Order Exceptions"),
         "consumption": {"rest": [{"method": "GET", "path": "/process/v1/exceptions", "description": "Exception queue"}]},
@@ -282,6 +294,7 @@ DATASETS: list[dict[str, Any]] = [
             f("quantity", "decimal", "Quantity of this lot"), f("uom", "string", "UOM"),
             f("traceabilityLotCode", "string", "FSMA 204 Traceability Lot Code"), f("packDate", "date", "Pack date"),
             f("bestByDate", "date", "Best-by date"), f("countryOfOrigin", "string", "Country of origin"),
+            f("region", "enum", "Fulfilling region"), f("shipFromWarehouse", "string", "Ship-from warehouse"),
         ],
         "lineage": _fulfilment_lineage("Shipments & Traceability"),
         "consumption": {"rest": [{"method": "GET", "path": "/process/v1/orders/{orderId}/status", "description": "Shipments per order"}],
@@ -307,6 +320,7 @@ DATASETS: list[dict[str, Any]] = [
             f("quantity", "decimal", "Invoiced quantity"), f("unitPrice", "decimal", "Unit price"),
             f("lineAmount", "decimal", "Line amount"), f("amount", "decimal", "Invoice total"),
             f("currency", "string", "Currency"), f("invoiceStatus", "enum", "POSTED, SENT, PAID, CREDITED"),
+            f("region", "enum", "Fulfilling region"),
         ],
         "lineage": _fulfilment_lineage("Invoices"),
         "consumption": {"rest": [{"method": "GET", "path": "/process/v1/orders/{orderId}", "description": "invoices[] on the canonical order"}],
@@ -456,6 +470,93 @@ DATASETS: list[dict[str, Any]] = [
         "lineage": _master_lineage("EDI Trading Partners", "Integration Account agreements"),
         "consumption": {"rest": [{"method": "GET", "path": "/system/v1/masterdata/trading-partners", "description": "Partners"}]},
         "consumers": ["EDI experience API", "Chargeback analysis"],
+    },
+]
+
+OPS_OWNER = {"name": "Network operations owner", "team": "Supply Chain & Regional Operations", "email": "network-ops@taylorfarms.example"}
+
+DATASETS += [
+    {
+        "id": "regional-performance", "name": "Regional & Site Performance", "object": "Regional KPI", "domain": "Operations",
+        "type": "Metric", "version": "1.0.0", "classification": "Internal", "accessPolicy": "auto",
+        "tags": ["regional", "national", "otif", "fill-rate", "kpi", "certified"], "certified": True,
+        "summary": "OTIF, fill rate, revenue, touchless rate, cycle time, exceptions and orders at risk by region and site.",
+        "description": ("National roll-up of the order service levels by operating region and processing site: on-time "
+                        "in-full (OTIF), fill rate, revenue, touchless and first-pass rates, receipt-to-D365 cycle time, "
+                        "open exceptions, orders and value at risk, and cross-region sourcing. Filter by account scope to "
+                        "compare national accounts with regional accounts."),
+        "owner": OPS_OWNER, "steward": STEWARD,
+        "refresh": {"mode": "Computed on request", "frequency": "On demand (gold mart refreshed hourly)", "freshnessSlaSeconds": 3600,
+                    "detail": "Process API computes live from the ROI and service tags on each order."},
+        "retention": "n/a (derived)", "grain": "One row per region, or per site within a region",
+        "primaryKey": ["level", "key"], "statsKey": "orders", "qualityRules": [],
+        "filters": [{"name": "level", "label": "Level", "type": "enum", "values": ["REGION", "SITE"]}] + SCOPE_FILTERS,
+        "schema": [
+            f("level", "enum", "REGION or SITE", key=True), f("key", "string", "Region id or warehouse", key=True),
+            f("name", "string", "Region / site name"), f("region", "enum", "Region"),
+            f("orders", "integer", "Orders"), f("revenue", "decimal", "Order value (excl. cancelled)"),
+            f("otifRate", "decimal", "On-time in-full rate of delivered orders (0-1)"),
+            f("onTimeDeliveryRate", "decimal", "Delivered on/before requested date (0-1)"),
+            f("inFullRate", "decimal", "Delivered complete (0-1)"), f("fillRate", "decimal", "Shipped ÷ ordered quantity (0-1)"),
+            f("touchlessRate", "decimal", "Touchless order rate (0-1)"),
+            f("firstPassValidationRate", "decimal", "First-pass validation rate (0-1)"),
+            f("avgReceiptToErpMinutes", "decimal", "Average receipt → D365 minutes"),
+            f("openExceptions", "integer", "Orders with open exceptions"), f("ordersAtRisk", "integer", "Open orders at risk"),
+            f("valueAtRisk", "decimal", "Value of orders at risk"), f("crossRegionOrders", "integer", "Orders sourced cross-region"),
+        ],
+        "lineage": _fulfilment_lineage("Regional & Site Performance"),
+        "consumption": {"rest": [{"method": "GET", "path": "/process/v1/metrics/kpis?region={region}", "description": "byRegion / bySite"}],
+                        "lakehouse": {"table": "sales_order.gold.gold_regional_performance"}},
+        "consumers": ["Regional GMs", "National accounts team", "Executive dashboard"],
+    },
+    {
+        "id": "orders-at-risk", "name": "Orders at Risk", "object": "At-risk Order", "domain": "Operations",
+        "type": "Operational dataset", "version": "1.0.0", "classification": "Internal", "accessPolicy": "auto",
+        "tags": ["regional", "service-level", "chargeback", "proactive"],
+        "summary": "Open orders likely to miss the customer promise: holds, late promises, missed dates, backorders, late 855s.",
+        "description": ("Proactive service-recovery list. Each open order is evaluated against rules - action required "
+                        "(exception, credit hold, ERP rejection, manual hold), D365 promise later than requested, requested "
+                        "ship/delivery date passed, backorders, and EDI 855 not sent within 4 hours (chargeback risk) - "
+                        "with severity and value at risk."),
+        "owner": OPS_OWNER, "steward": STEWARD,
+        "refresh": {"mode": "Computed on request", "frequency": "Continuous", "freshnessSlaSeconds": 60,
+                    "detail": "Evaluated live against the current state of every open order."},
+        "retention": "Current state", "grain": "One row per at-risk order and reason", "primaryKey": ["orderId", "reasonCode"],
+        "statsKey": None, "qualityRules": [], "filters": SCOPE_FILTERS,
+        "schema": [
+            f("orderId", "string", "Order id", key=True), f("reasonCode", "enum", "ACTION_REQUIRED, LATE_PROMISE, SHIP_DATE_MISSED, DELIVERY_OVERDUE, BACKORDER, ACK_855_LATE", key=True),
+            f("severity", "enum", "HIGH / MEDIUM"), f("reason", "string", "Explanation"),
+            f("customerId", "string", "Customer"), f("customerName", "string", "Customer name"), f("customerPo", "string", "PO"),
+            f("region", "enum", "Fulfilling region"), f("shipFromWarehouse", "string", "Site"), f("accountScope", "enum", "Account scope"),
+            f("status", "enum", "Order status"), f("requestedDeliveryDate", "date", "Requested delivery"),
+            f("promisedShipDate", "date", "D365 promised ship date"), f("totalAmount", "decimal", "Order value"),
+        ],
+        "lineage": _fulfilment_lineage("Orders at Risk"),
+        "consumption": {"rest": [{"method": "GET", "path": "/process/v1/orders/at-risk", "description": "At-risk orders"}]},
+        "consumers": ["Customer service", "Regional operations", "National account managers"],
+    },
+    {
+        "id": "sites-inventory", "name": "Sites & Available Inventory", "object": "Site Inventory", "domain": "Operations",
+        "type": "Master data", "version": "1.0.0", "classification": "Internal", "accessPolicy": "auto",
+        "tags": ["regional", "inventory", "sourcing", "network"],
+        "summary": "Processing sites by region with on-hand available cases per item - the input to network sourcing.",
+        "description": ("Every processing site / warehouse in the regional network with its region and the cases available "
+                        "per item (D365 on-hand). Used by order sourcing to choose the home site, an alternate site in "
+                        "the region, or a cross-region site."),
+        "owner": OPS_OWNER, "steward": {"name": "Inventory steward", "team": "Supply Planning", "email": "inventory@taylorfarms.example"},
+        "refresh": {"mode": "Scheduled cache", "frequency": "Near real time (2 s cache over D365 on-hand)", "freshnessSlaSeconds": 300,
+                    "detail": "System API reads D365 on-hand; reservations reduce availability immediately."},
+        "retention": "Current state", "grain": "One row per warehouse × item", "primaryKey": ["warehouse", "itemNumber"],
+        "statsKey": None, "qualityRules": [], "filters": [SCOPE_FILTERS[0], {"name": "itemNumber", "label": "Item", "type": "string"}],
+        "schema": [
+            f("warehouse", "string", "D365 warehouse", key=True), f("itemNumber", "string", "Item", key=True),
+            f("siteId", "string", "Site"), f("siteName", "string", "Site name"), f("region", "enum", "Region"),
+            f("regionName", "string", "Region name"), f("available", "decimal", "Available cases"),
+        ],
+        "lineage": _master_lineage("Sites & Available Inventory", "InventOnHandV2"),
+        "consumption": {"rest": [{"method": "GET", "path": "/system/v1/masterdata/inventory", "description": "On-hand by site"},
+                                 {"method": "GET", "path": "/system/v1/masterdata/regions", "description": "Regions & sites"}]},
+        "consumers": ["Order sourcing", "Supply planning"],
     },
 ]
 

@@ -28,8 +28,8 @@ async def test_portal_order_full_lifecycle(h):
 
     hist = await h.history(oid)
     types = [e["eventType"] for e in hist]
-    assert types[:7] == ["ORDER_RECEIVED", "ORDER_INGESTED", "VALIDATION_PASSED", "ORDER_ENRICHED",
-                         "ORDER_PUBLISHED", "SUBMITTED_TO_ERP", "ERP_ACCEPTED"]
+    assert types[:8] == ["ORDER_RECEIVED", "ORDER_INGESTED", "VALIDATION_PASSED", "ORDER_ENRICHED",
+                         "ORDER_SOURCED", "ORDER_PUBLISHED", "SUBMITTED_TO_ERP", "ERP_ACCEPTED"]
     for t in ("RELEASED_TO_WAREHOUSE", "PICKED", "PACKED", "SHIPPED", "DELIVERED", "INVOICED", "NOTIFICATION_SENT"):
         assert t in types
     assert [e["sequence"] for e in hist] == list(range(1, len(hist) + 1))

@@ -130,6 +130,7 @@ async def validate(order: dict[str, Any], md: MasterDataClient, find_duplicates)
             c.add("DQ-002", True)
             ship["partyId"] = st["shipToId"]
             ship["customerId"] = st["customerId"]
+            await _assign_demand_region(order, st, customer, md)
 
     # DQ-006 duplicate open order
     if cust_id and po:
@@ -365,3 +366,75 @@ def earliest_valid_delivery(st: dict | None, lead_days: int = 1) -> date:
     while DAYS[d.weekday()] not in days:
         d += timedelta(days=1)
     return d
+
+
+async def source(order: dict[str, Any], md: MasterDataClient) -> dict[str, Any]:
+    """Network-aware sourcing: pick the processing site that ships the order.
+
+    Candidates are evaluated in order - the ship-to region's primary site, its other sites, then adjacent
+    regions, then the rest of the network. The first site that can fill every line from on-hand wins;
+    otherwise the site with the best fill rate (home site wins ties). The decision is stored on the order
+    (`fulfillment.sourcing`) so planners and customers can see *why* a site was chosen.
+    """
+    st = await md.ship_to(order["parties"]["shipTo"]["partyId"])
+    customer = await md.customer(order["parties"]["soldTo"]["partyId"])
+    regions = {r["regionId"]: r for r in await md.regions()}
+    home_region = st.get("region") or next(iter(regions), None)
+    ordered_regions = [home_region] + [r for r in (regions.get(home_region) or {}).get("adjacentRegions", []) if r in regions]
+    ordered_regions += [r for r in regions if r not in ordered_regions]
+    candidates: list[dict[str, Any]] = []
+    for rid in ordered_regions:
+        for site in sorted(regions[rid]["sites"], key=lambda x: not x.get("primary")):
+            candidates.append({"warehouse": site["warehouse"], "siteId": site["siteId"], "siteName": site["name"],
+                               "regionId": rid, "regionName": regions[rid]["name"],
+                               "home": rid == home_region and bool(site.get("primary"))})
+    on_hand: dict[tuple[str, str], float] = {(r["warehouse"], r["itemNumber"]): float(r["available"])
+                                             for r in await md.inventory()}
+    needs: list[tuple[str, float]] = []
+    for ln in order["lines"]:
+        item = await md.item(ln["item"]["itemNumber"])
+        conv = float((item or {}).get("uomConversions", {}).get(ln["quantity"]["uom"], 1) or 1)
+        needs.append((ln["item"]["itemNumber"], float(ln["quantity"]["value"]) / conv))
+    total = sum(q for _, q in needs) or 1.0
+    for c in candidates:
+        c["fillRate"] = round(sum(min(q, on_hand.get((c["warehouse"], i), 0.0)) for i, q in needs) / total, 4)
+    chosen = next((c for c in candidates if c["fillRate"] >= 1.0), None)
+    if chosen is None:
+        chosen = max(candidates, key=lambda c: (c["fillRate"], c["home"]))
+        rule = "BEST_AVAILABLE"
+        reason = (f"No site can fill the whole order; {chosen['siteName']} has the best fill "
+                  f"({chosen['fillRate']:.0%}) - remaining quantity will be backordered")
+    elif chosen["home"]:
+        rule, reason = "HOME_SITE", f"{chosen['siteName']} (home site for {chosen['regionName']}) can fill the order"
+    elif chosen["regionId"] == home_region:
+        rule, reason = "ALTERNATE_SITE_IN_REGION", (f"Home site short on inventory; {chosen['siteName']} in the same "
+                                                    f"region fills the order")
+    else:
+        rule, reason = "CROSS_REGION", (f"No {regions[home_region]['name']} site can fill the order; sourced from "
+                                        f"{chosen['siteName']} ({chosen['regionName']}) - extra freight and transit risk")
+    for c in candidates:
+        c["chosen"] = c is chosen
+    order["fulfillment"] = {
+        "regionId": chosen["regionId"], "regionName": chosen["regionName"], "customerRegionId": home_region,
+        "siteId": chosen["siteId"], "warehouse": chosen["warehouse"], "siteName": chosen["siteName"],
+        "accountScope": (customer or {}).get("accountScope"), "crossRegion": chosen["regionId"] != home_region,
+        "sourcing": {"rule": rule, "reason": reason, "decidedAt": utcnow().isoformat(),
+                     "candidates": [{k: c[k] for k in ("warehouse", "siteId", "regionId", "fillRate", "home", "chosen")}
+                                    for c in candidates]},
+    }
+    shp = order.setdefault("shipping", {})
+    shp["shipFromSite"], shp["shipFromWarehouse"] = chosen["siteId"], chosen["warehouse"]
+    order["parties"]["shipFrom"] = {"role": "SHIP_FROM", "partyId": chosen["warehouse"], "name": chosen["siteName"]}
+    return order["fulfillment"]
+
+
+async def _assign_demand_region(order: dict[str, Any], st: dict, customer: dict | None, md: MasterDataClient) -> None:
+    """As soon as the ship-to is known, the order belongs to its demand region - so regional teams see their
+    exceptions even when the order never reaches sourcing. Sourcing later confirms or changes the region."""
+    ful = order.get("fulfillment") or {}
+    if ful.get("sourcing") or not st.get("region"):
+        return
+    regions = {r["regionId"]: r for r in await md.regions()}
+    order["fulfillment"] = {"regionId": st["region"], "regionName": (regions.get(st["region"]) or {}).get("name"),
+                            "customerRegionId": st["region"], "accountScope": (customer or {}).get("accountScope"),
+                            "crossRegion": False}

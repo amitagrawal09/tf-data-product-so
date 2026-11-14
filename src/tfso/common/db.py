@@ -45,7 +45,32 @@ class Database:
     def __init__(self, url: str, metadata=None):
         self.engine = make_engine(url)
         self.SessionLocal = sessionmaker(bind=self.engine, expire_on_commit=False, future=True)
-        (metadata or Base.metadata).create_all(self.engine)
+        md = metadata or Base.metadata
+        md.create_all(self.engine)
+        self._add_missing_columns(md)
+
+    def _add_missing_columns(self, metadata) -> None:
+        """Lightweight additive migration: create columns added to the models after the table existed
+        (new nullable/defaulted columns only; destructive changes need a real migration)."""
+        from sqlalchemy import inspect, text
+        insp = inspect(self.engine)
+        with self.engine.begin() as conn:
+            for table in metadata.sorted_tables:
+                if not insp.has_table(table.name):
+                    continue
+                existing = {c["name"] for c in insp.get_columns(table.name)}
+                for col in table.columns:
+                    if col.name in existing:
+                        continue
+                    ddl_type = col.type.compile(dialect=self.engine.dialect)
+                    default = ""
+                    if col.default is not None and getattr(col.default, "is_scalar", False):
+                        v = col.default.arg
+                        default = f" DEFAULT {('TRUE' if v else 'FALSE') if isinstance(v, bool) else repr(v)}"
+                    conn.execute(text(f'ALTER TABLE {table.name} ADD COLUMN {col.name} {ddl_type}{default}'))
+                    for idx in table.indexes:
+                        if [c.name for c in idx.columns] == [col.name]:
+                            conn.execute(text(f"CREATE INDEX IF NOT EXISTS {idx.name} ON {table.name} ({col.name})"))
 
     @contextmanager
     def session(self) -> Iterator[Session]:

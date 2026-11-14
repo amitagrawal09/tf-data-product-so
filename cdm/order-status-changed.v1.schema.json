@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://schemas.taylorfarms.example/sales-order/order-status-changed.v1.json",
   "title": "OrderStatusChanged event data (sales-order-events)",
-  "x-cdm-version": "1.0.0",
+  "x-cdm-version": "1.1.0",
   "$defs": {
     "HistoryEventType": {
       "enum": [
@@ -11,6 +11,7 @@
         "VALIDATION_PASSED",
         "VALIDATION_FAILED",
         "ORDER_ENRICHED",
+        "ORDER_SOURCED",
         "ORDER_PUBLISHED",
         "ORDER_CORRECTED",
         "ORDER_RESUBMITTED",

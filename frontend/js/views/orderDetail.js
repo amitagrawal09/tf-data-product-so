@@ -105,7 +105,9 @@ function renderHeader(el) {
   const status = s.status || o.status, cat = s.statusCategory || o.statusCategory;
   setHTML($("#subtitle", el), html`${statusBadge(status, cat)} <span class="chip">${channel(o) || "?"}</span>
     ${custName(o) || custId(o) || ""} · PO <strong>${pick(o, "customerPo", "customerPurchaseOrder.number", "purchaseOrderNumber") || "–"}</strong>
-    ${erpId(o) ? html` · D365 <span class="mono">${erpId(o)}</span>` : ""} · v${o.version ?? "?"}`);
+    ${erpId(o) ? html` · D365 <span class="mono">${erpId(o)}</span>` : ""} · v${o.version ?? "?"}
+    ${(() => { const f = fulfil(o); return f.regionName || f.regionId ? html` · <span class="chip" title="Fulfilment region / site">${f.regionName || f.regionId}${f.warehouse ? ` · ${f.warehouse}` : ""}</span>` : ""; })()}
+    ${(fulfil(o).crossRegion) ? html` <span class="tag" title="Sourced outside the home region">cross-region</span>` : ""}`);
 
   // Milestone stepper
   let ms = Array.isArray(s.milestones) ? s.milestones : [];
@@ -351,6 +353,47 @@ async function renderTab(el) {
   } catch (e) { setHTML(host, errorBox(e)); }
 }
 
+/** Fulfilment & sourcing facts: canonical `fulfillment`, falling back to the status view / shipping block. */
+function fulfil(o) {
+  const f = o.fulfillment || {};
+  const s = state.statusView || {};
+  const shp = o.shipping || {};
+  return {
+    regionId: f.regionId || s.region, regionName: f.regionName || s.regionName,
+    siteId: f.siteId || shp.shipFromSite, warehouse: f.warehouse || s.shipFromWarehouse || shp.shipFromWarehouse,
+    siteName: f.siteName, accountScope: f.accountScope, crossRegion: !!f.crossRegion,
+    sourcing: f.sourcing || (s.sourcingRule ? { rule: s.sourcingRule } : null),
+  };
+}
+
+const RULE_LABEL = { HOME_SITE: "Home site", ALTERNATE_SITE_IN_REGION: "Alternate site in region", CROSS_REGION: "Cross-region", BEST_AVAILABLE: "Best available" };
+
+function fulfilmentCard(o) {
+  const f = fulfil(o);
+  if (!f.regionId && !f.warehouse && !f.sourcing) return "";
+  const src = f.sourcing || {};
+  const cands = items(src.candidates || []);
+  const pctFill = v => (v === null || v === undefined ? "–" : `${fmtNum(Number(v) <= 1 ? Number(v) * 100 : Number(v), 1)}%`);
+  return html`<div class="card"><h2>Fulfillment &amp; sourcing</h2>
+    <div class="grid grid-2">
+      <div>${kv({
+        region: f.regionName || f.regionId, site: f.siteName ? `${f.siteName} (${f.siteId || ""})` : f.siteId,
+        warehouse: f.warehouse, accountScope: f.accountScope, crossRegion: f.crossRegion,
+        rule: src.rule, decidedAt: src.decidedAt }, [
+        ["region", "Region"], ["site", "Site"], ["warehouse", "Warehouse"],
+        ["accountScope", "Account scope", v => (v === "NATIONAL" ? "National account" : v === "REGIONAL" ? "Regional account" : v)],
+        ["crossRegion", "Cross-region", v => (v ? "Yes – shipped outside the home region" : "No")],
+        ["rule", "Sourcing rule", v => RULE_LABEL[v] || humanize(v)], ["decidedAt", "Decided", fmtDate]])}
+        ${src.reason ? html`<p class="small section-gap">${src.reason}</p>` : ""}</div>
+      <div>${cands.length ? html`<div class="table-wrap"><table class="dense"><thead><tr><th>Warehouse</th><th>Region</th><th class="num">Fill rate</th><th></th></tr></thead>
+        <tbody>${cands.map(c => html`<tr class="${c.chosen ? "selected" : ""}"><td class="mono">${c.warehouse}${c.siteId ? html`<div class="small muted">${c.siteId}</div>` : ""}</td>
+          <td>${c.regionId || "–"}</td><td class="num">${pctFill(c.fillRate)}</td>
+          <td class="nowrap">${c.home ? html`<span class="tag">home</span> ` : ""}${c.chosen ? html`<span class="badge ok">chosen</span>` : ""}</td></tr>`)}</tbody></table></div>
+        <div class="small muted section-gap">Candidates the sourcing engine evaluated (fill rate = share of ordered quantity it could confirm).</div>`
+        : html`<div class="empty">No sourcing candidates recorded</div>`}</div>
+    </div></div>`;
+}
+
 function renderOverview(host, o) {
   const s = state.statusView || {};
   const ex = Array.isArray(o.exceptions) ? o.exceptions : [];
@@ -359,7 +402,8 @@ function renderOverview(host, o) {
   const shipments = items(s.shipments || o.shipments || []);
   const invoices = items(s.invoices || o.invoices || []);
   setHTML(host, html`
-    <div class="grid grid-2">
+    ${fulfilmentCard(o)}
+    <div class="grid grid-2 section-gap">
       <div class="card"><h2>Exceptions</h2>
         ${ex.length ? html`<div class="table-wrap"><table><thead><tr><th>Rule</th><th>Severity</th><th>Line</th><th>Message</th><th>State</th></tr></thead>
           <tbody>${ex.map(x => html`<tr><td class="mono">${x.ruleId || x.code}</td><td>${sevBadge(x.severity)}</td><td>${x.lineNumber || ""}</td>

@@ -29,6 +29,7 @@ class AdvanceRequest(BaseModel):
     to: str
     lines: list[dict[str, Any]] | None = None
     carrier: dict[str, Any] | None = None
+    deliveredAt: str | None = None  # simulate proof of delivery at a given time (e.g. a late delivery)
 
 
 class SimConfig(BaseModel):
@@ -182,9 +183,30 @@ def create_system_app(settings: Settings | None = None) -> FastAPI:
     async def trading_partners():
         return {"items": list(md.partners.values())}
 
-    @app.get("/v1/masterdata/inventory", tags=["master data"], summary="Available inventory by item (D365 on-hand)")
-    async def inventory():
-        return {"items": [{"itemNumber": k, "available": v, "warehouse": "WH-SAL"} for k, v in sorted(md.inventory.items())]}
+    @app.get("/v1/masterdata/inventory", tags=["master data"], summary="Available inventory by warehouse and item (D365 on-hand)")
+    async def inventory(warehouse: str | None = None, region: str | None = None, itemNumber: str | None = None):
+        rows = []
+        for wh, items in sorted(md.inventory_by_site.items()):
+            site = md.sites.get(wh, {})
+            if warehouse and wh != warehouse:
+                continue
+            if region and site.get("regionId") != region:
+                continue
+            for item, qty in sorted(items.items()):
+                if itemNumber and item != itemNumber:
+                    continue
+                rows.append({"warehouse": wh, "siteId": site.get("siteId"), "siteName": site.get("name"),
+                             "region": site.get("regionId"), "regionName": site.get("regionName"),
+                             "itemNumber": item, "available": qty})
+        return {"items": rows}
+
+    @app.get("/v1/masterdata/regions", tags=["master data"], summary="Operating regions and their processing sites")
+    async def regions():
+        return {"items": list(md.regions.values())}
+
+    @app.get("/v1/masterdata/sites", tags=["master data"], summary="Processing sites / warehouses")
+    async def sites(region: str | None = None):
+        return {"items": [s for s in md.sites.values() if not region or s["regionId"] == region]}
 
     @app.get("/v1/masterdata/items", tags=["master data"])
     async def items(active: bool | None = None):
@@ -275,7 +297,7 @@ def create_system_app(settings: Settings | None = None) -> FastAPI:
     async def sim_advance(order_id: str, req: AdvanceRequest):
         _sim_guard()
         try:
-            events = await erp.advance(order_id, req.to, req.lines, req.carrier)
+            events = await erp.advance(order_id, req.to, req.lines, req.carrier, req.deliveredAt)
         except LookupError:
             raise ApiError(404, "Order not in D365", f"{order_id} has not been created in D365 yet")
         except ValueError as e:

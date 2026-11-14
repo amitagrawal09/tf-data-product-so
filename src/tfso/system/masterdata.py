@@ -25,7 +25,28 @@ class SeedMasterData:
         self.ship_tos = {s["shipToId"]: s for s in data["shipTos"]}
         self.items = {i["itemNumber"]: i for i in data["items"]}
         self.partners = {p["isaId"]: p for p in data["tradingPartners"]}
-        self.inventory = dict(data.get("inventory", {}))
+        self.regions = {r["regionId"]: r for r in data.get("regions", [])}
+        self.sites = {s["warehouse"]: {**s, "regionId": r["regionId"], "regionName": r["name"]}
+                      for r in data.get("regions", []) for s in r["sites"]}
+        self.inventory_by_site: dict[str, dict[str, float]] = {
+            wh: dict(items) for wh, items in data.get("inventoryBySite", {}).items()}
+
+    # -------------------------------------------------------------- inventory (D365 on-hand by warehouse)
+    @property
+    def inventory(self) -> dict[str, float]:
+        """Network total by item."""
+        total: dict[str, float] = {}
+        for items in self.inventory_by_site.values():
+            for k, v in items.items():
+                total[k] = total.get(k, 0) + v
+        return total
+
+    def available(self, warehouse: str, item_number: str) -> float:
+        return float(self.inventory_by_site.get(warehouse, {}).get(item_number, 0))
+
+    def consume(self, warehouse: str, item_number: str, qty: float) -> None:
+        site = self.inventory_by_site.setdefault(warehouse, {})
+        site[item_number] = max(0.0, float(site.get(item_number, 0)) - qty)
 
     async def list_customers(self, active: bool | None = None) -> list[dict]:
         return [c for c in self.customers.values() if active is None or c["active"] == active]

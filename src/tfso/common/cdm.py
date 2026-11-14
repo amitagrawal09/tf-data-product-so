@@ -19,7 +19,7 @@ from pydantic.alias_generators import to_camel
 
 from .statuses import HistoryEventType, LineStatus, OrderStatus, StatusCategory
 
-CDM_VERSION = "1.0.0"
+CDM_VERSION = "1.1.0"  # 1.1.0: additive `fulfillment` (region, site, account scope, sourcing decision)
 
 
 class CdmModel(BaseModel):
@@ -316,6 +316,36 @@ class ShippingInstructions(CdmModel):
     appointment_required: bool = False
     pallet_type: str | None = None
     special_instructions: str | None = None
+
+
+class SourcingCandidate(CdmModel):
+    warehouse: str
+    site_id: str | None = None
+    region_id: str | None = None
+    fill_rate: float = Field(description="Share of ordered quantity the site can fill from on-hand (0-1)")
+    home: bool = Field(False, description="Primary site of the ship-to's region")
+    chosen: bool = False
+
+
+class SourcingDecision(CdmModel):
+    rule: Literal["HOME_SITE", "ALTERNATE_SITE_IN_REGION", "CROSS_REGION", "BEST_AVAILABLE"]
+    reason: str
+    decided_at: datetime
+    candidates: list[SourcingCandidate] = Field(default_factory=list)
+
+
+class Fulfillment(CdmModel):
+    """Where the order is fulfilled in the regional network (added in contract 1.1.0)."""
+    region_id: str = Field(description="Fulfilling operating region, e.g. WEST, CENTRAL, NORTHEAST")
+    region_name: str | None = None
+    customer_region_id: str | None = Field(None, description="Region the ship-to belongs to (demand region)")
+    site_id: str | None = None
+    warehouse: str | None = Field(None, description="D365 warehouse that ships the order")
+    site_name: str | None = None
+    account_scope: Literal["NATIONAL", "REGIONAL"] | None = Field(
+        None, description="NATIONAL accounts are served from more than one region")
+    cross_region: bool = Field(False, description="Fulfilled outside the ship-to's home region")
+    sourcing: SourcingDecision | None = None
 
 
 # --------------------------------------------------------------------------- lines
@@ -640,6 +670,7 @@ class SalesOrder(CdmModel):
     dates: OrderDates = Field(default_factory=OrderDates)
     commercial: Commercial = Field(default_factory=Commercial)
     shipping: ShippingInstructions = Field(default_factory=ShippingInstructions)
+    fulfillment: Fulfillment | None = Field(None, description="Regional network fulfilment and sourcing decision")
     lines: list[OrderLine] = Field(min_length=0)
     allowances_charges: list[AllowanceCharge] = Field(default_factory=list)
     totals: Totals = Field(default_factory=Totals)

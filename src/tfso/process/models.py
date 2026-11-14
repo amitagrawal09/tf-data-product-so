@@ -46,6 +46,10 @@ class OrderRow(ProcessBase):
     erp_created: Mapped[bool] = mapped_column(Boolean, default=False)
     receipt_to_erp_minutes: Mapped[float | None] = mapped_column(Float, nullable=True)
     receipt_to_ship_hours: Mapped[float | None] = mapped_column(Float, nullable=True)
+    region: Mapped[str | None] = mapped_column(String(20), index=True, nullable=True)
+    ship_from_warehouse: Mapped[str | None] = mapped_column(String(20), index=True, nullable=True)
+    account_scope: Mapped[str | None] = mapped_column(String(10), index=True, nullable=True)
+    cross_region: Mapped[bool] = mapped_column(Boolean, default=False)
     doc: Mapped[dict] = mapped_column(JsonDoc)
 
     __table_args__ = (Index("ix_orders_customer_po", "customer_id", "customer_po"),)

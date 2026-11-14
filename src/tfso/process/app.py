@@ -222,19 +222,31 @@ def create_process_app(settings: Settings | None = None) -> FastAPI:
                      fromDate: date | None = None, toDate: date | None = None, hasExceptions: bool | None = None,
                      q: str | None = None, page: int = Query(1, ge=1), pageSize: int = Query(25, ge=1, le=200),
                      sort: str = "-receivedAt",
-                     full: bool = Query(False, description="Include the canonical order document in each item")):
+                     full: bool = Query(False, description="Include the canonical order document in each item"),
+                     region: str | None = Query(None, description="Operating region(s), e.g. WEST or WEST,CENTRAL"),
+                     site: str | None = Query(None, description="Ship-from warehouse(s), e.g. WH-SAL"),
+                     accountScope: str | None = Query(None, description="NATIONAL or REGIONAL accounts")):
         return views.search_orders(db, status=status, status_category=statusCategory, customer_id=customerId,
                                    channel=channel, customer_po=customerPo, erp_sales_order_id=erpSalesOrderId,
                                    from_date=fromDate, to_date=toDate, has_exceptions=hasExceptions, q=q, page=page,
-                                   page_size=pageSize, sort=sort, full=full)
+                                   page_size=pageSize, sort=sort, full=full, region=region, site=site,
+                                   account_scope=accountScope)
+
+    @app.get("/v1/orders/at-risk", tags=["order status"],
+             summary="Open orders at risk of missing the customer promise (late promise, missed dates, backorder, holds, late 855)")
+    async def orders_at_risk(region: str | None = None, site: str | None = None, accountScope: str | None = None,
+                             customerId: str | None = None):
+        return views.at_risk(db, region, site, accountScope, customerId)
 
     @app.get("/v1/order-events", tags=["order status"],
              summary="Lifecycle event feed across all orders (oldest first, paged)")
     async def order_events(since: datetime | None = None, until: datetime | None = None, eventType: str | None = None,
                            orderId: str | None = None, sourceSystem: str | None = None,
-                           page: int = Query(1, ge=1), pageSize: int = Query(200, ge=1, le=1000)):
+                           page: int = Query(1, ge=1), pageSize: int = Query(200, ge=1, le=1000),
+                           region: str | None = None, site: str | None = None, accountScope: str | None = None):
         return views.event_feed(db, since=since, until=until, event_type=eventType, order_id=orderId,
-                                source_system=sourceSystem, page=page, page_size=pageSize)
+                                source_system=sourceSystem, page=page, page_size=pageSize, region=region, site=site,
+                                account_scope=accountScope)
 
     @app.get("/v1/datasets/stats", tags=["governance"], summary="Live volume/freshness facts for the data catalog")
     async def ds_stats():
@@ -374,16 +386,18 @@ def create_process_app(settings: Settings | None = None) -> FastAPI:
         return views.group_history(db, group_id)
 
     @app.get("/v1/exceptions", tags=["customer service"], summary="Exception queue")
-    async def exceptions(customerId: str | None = None, code: str | None = None):
-        return views.exceptions_queue(db, customerId, code)
+    async def exceptions(customerId: str | None = None, code: str | None = None, region: str | None = None,
+                         site: str | None = None, accountScope: str | None = None):
+        return views.exceptions_queue(db, customerId, code, region, site, accountScope)
 
     @app.get("/v1/status/summary", tags=["order status"])
-    async def status_summary():
-        return views.summary(db)
+    async def status_summary(region: str | None = None, site: str | None = None, accountScope: str | None = None):
+        return views.summary(db, region, site, accountScope)
 
     @app.get("/v1/metrics/kpis", tags=["order status"], summary="Touchless rate, first-pass, cycle time, freshness, ROI")
-    async def metrics(laborRatePerHour: float = 32.0):
-        return views.kpis(db, laborRatePerHour)
+    async def metrics(laborRatePerHour: float = 32.0, region: str | None = None, site: str | None = None,
+                      accountScope: str | None = None):
+        return views.kpis(db, laborRatePerHour, region, site, accountScope)
 
     # ------------------------------------------------------------------ customer service
     @app.patch("/v1/orders/{order_id}", tags=["customer service"], summary="Correct an order in the exception queue")

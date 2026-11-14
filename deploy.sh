@@ -10,6 +10,7 @@
 #                             publish the console, smoke test through API Management
 #   ./deploy.sh test          run the automated test suite (pytest)
 #   ./deploy.sh smoke [URL]   run the smoke test against an API base URL
+#   ./deploy.sh demo-data     load demo orders across all regions / channels (after local or docker)
 #   ./deploy.sh destroy       delete the Azure resource group (asks for confirmation)
 #   ./deploy.sh --help
 # =====================================================================================
@@ -164,7 +165,21 @@ local_stop() {
       rm -f "$pidfile"
     done
   fi
-  [[ "$any" == "true" ]] || log "nothing running"
+  if [[ "$any" == "true" ]]; then
+    # wait (up to ~15 s) for graceful shutdown so an immediate restart finds the ports free
+    local tries=0 svc port busy
+    while (( tries < 30 )); do
+      busy=false
+      for svc in "${LOCAL_SERVICES[@]}"; do
+        port="${svc##*:}"
+        if curl -fsS -o /dev/null --max-time 1 "http://localhost:${port}/health" 2>/dev/null; then busy=true; fi
+      done
+      [[ "$busy" == "false" ]] && break
+      sleep 0.5; tries=$((tries + 1))
+    done
+  else
+    log "nothing running"
+  fi
 }
 
 local_up() {
@@ -503,6 +518,8 @@ main() {
     destroy)      azure_destroy ;;
     test)         run_tests "$@" ;;
     smoke)        ensure_python; run_smoke "${1:-http://localhost:8080/api}" --api-key "$LOCAL_API_KEY" ;;
+    demo-data)    ensure_python; step "Loading demo orders across all regions"
+                  "$VENV_PY" -m tfso.tools.seed_demo --base "${1:-http://localhost:8080/api}" --api-key "$LOCAL_API_KEY" ;;
     -h|--help|help|"") usage ;;
     *)            usage; die "unknown command: $cmd" ;;
   esac

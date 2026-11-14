@@ -67,7 +67,8 @@ def _project(rows: list[dict], schema: list[dict], fields: list[str] | None) -> 
 
 async def _orders(ff: Fulfilment, filters: dict, limit: int, full: bool = False) -> list[dict]:
     out, page = [], 1
-    params = {k: filters.get(k) for k in ("status", "statusCategory", "channel", "customerId", "fromDate", "toDate")}
+    params = {k: filters.get(k) for k in ("status", "statusCategory", "channel", "customerId", "fromDate", "toDate",
+                                          "region", "accountScope")}
     while len(out) < limit:
         res = await ff.get("process", "/v1/orders", {**params, "page": page, "pageSize": 200,
                                                      "full": "true" if full else None})
@@ -87,7 +88,8 @@ async def fetch_rows(ds: dict, ff: Fulfilment, filters: dict, limit: int, newest
         rows: list[dict] = []
         for it in await _orders(ff, filters, limit if i == "sales-order-lines" else MAX_EXPORT_ROWS, full=True):
             o = it["order"]
-            base = {"orderId": o["orderId"], "customerId": it.get("customerId"), "customerPo": it.get("customerPo")}
+            base = {"orderId": o["orderId"], "customerId": it.get("customerId"), "customerPo": it.get("customerPo"),
+                    "region": it.get("region"), "shipFromWarehouse": it.get("shipFromWarehouse")}
             lines = {ln["lineNumber"]: ln for ln in o.get("lines", [])}
             if i == "sales-order-lines":
                 for ln in o.get("lines", []):
@@ -129,7 +131,8 @@ async def fetch_rows(ds: dict, ff: Fulfilment, filters: dict, limit: int, newest
 
     if i == "order-lifecycle-events":
         params = {"eventType": filters.get("eventType"), "sourceSystem": filters.get("sourceSystem"),
-                  "orderId": filters.get("orderId"), "since": filters.get("since")}
+                  "orderId": filters.get("orderId"), "since": filters.get("since"), "region": filters.get("region"),
+                  "accountScope": filters.get("accountScope")}
         page_size = min(1000, max(limit, 1))
         res = await ff.get("process", "/v1/order-events", {**params, "page": 1, "pageSize": page_size})
         entries = list(res["items"])
@@ -150,12 +153,32 @@ async def fetch_rows(ds: dict, ff: Fulfilment, filters: dict, limit: int, newest
                  "changeCount": len(e.get("changes") or [])} for e in entries[:limit]]
 
     if i == "order-exceptions":
-        res = await ff.get("process", "/v1/exceptions", {"customerId": filters.get("customerId"), "code": filters.get("code")})
+        res = await ff.get("process", "/v1/exceptions", {"customerId": filters.get("customerId"), "code": filters.get("code"),
+                                                          "region": filters.get("region"), "accountScope": filters.get("accountScope")})
         return [{"exceptionId": ex.get("exceptionId"), "orderId": it["orderId"], "customerId": it.get("customerId"),
                  "customerName": it.get("customerName"), "customerPo": it.get("customerPo"),
                  "sourceChannel": it.get("sourceChannel"), **{k: ex.get(k) for k in ("code", "ruleId", "severity", "message",
                                                                                     "lineNumber", "field", "detectedAt")},
-                 "ageMinutes": it.get("ageMinutes")} for it in res["items"] for ex in it["exceptions"]][:limit]
+                 "ageMinutes": it.get("ageMinutes"), "region": it.get("region")}
+                for it in res["items"] for ex in it["exceptions"]][:limit]
+
+    if i == "regional-performance":
+        k = await ff.get("process", "/v1/metrics/kpis", {"region": filters.get("region"), "accountScope": filters.get("accountScope")})
+        level = (filters.get("level") or ("SITE" if filters.get("region") else "REGION")).upper()
+        src = k["bySite"] if level == "SITE" else k["byRegion"]
+        return [{**r, "level": level, "key": r.get("site") or r.get("region"),
+                 "name": r.get("siteName") or r.get("regionName")} for r in src][:limit]
+
+    if i == "orders-at-risk":
+        res = await ff.get("process", "/v1/orders/at-risk", {"region": filters.get("region"), "accountScope": filters.get("accountScope")})
+        return [{**{k: it.get(k) for k in ("orderId", "severity", "customerId", "customerName", "customerPo", "region",
+                                           "shipFromWarehouse", "accountScope", "status", "requestedDeliveryDate",
+                                           "promisedShipDate", "totalAmount")},
+                 "reasonCode": r["code"], "reason": r["message"]} for it in res["items"] for r in it["reasons"]][:limit]
+
+    if i == "sites-inventory":
+        res = await ff.get("system", "/v1/masterdata/inventory", {"region": filters.get("region"), "itemNumber": filters.get("itemNumber")})
+        return res["items"][:limit]
 
     if i == "order-kpis":
         return (await ff.get("process", "/v1/metrics/kpis"))["byChannel"][:limit]
@@ -291,10 +314,14 @@ def build_router(process: ServiceClient, system: ServiceClient) -> APIRouter:
                       "order-lifecycle-events": (stats["historyEvents"], stats.get("historyLastRecordedAt")),
                       "order-exceptions": (sum(len(i["exceptions"]) for i in exc["items"]), order_ts),
                       "shipments": (n_ship, last_ship or None), "invoices": (n_inv, last_inv or None),
-                      "order-kpis": (len({it.get("sourceChannel") for it in orders}), now)}
+                      "order-kpis": (len({it.get("sourceChannel") for it in orders}), now),
+                      "regional-performance": (len({it.get("region") for it in orders if it.get("region")}), now)}
+            risk = await ff.get("process", "/v1/orders/at-risk")
+            counts["orders-at-risk"] = (sum(len(x["reasons"]) for x in risk["items"]), now)
             for name, path in (("customers", "/v1/masterdata/customers"), ("ship-tos", "/v1/masterdata/ship-tos"),
                                ("items", "/v1/masterdata/items"), ("price-agreements", "/v1/masterdata/price-agreements"),
-                               ("trading-partners", "/v1/masterdata/trading-partners")):
+                               ("trading-partners", "/v1/masterdata/trading-partners"),
+                               ("sites-inventory", "/v1/masterdata/inventory")):
                 counts[name] = (len((await ff.get("system", path))["items"]), now)
             for ds in DATASETS:
                 n, last = counts.get(ds["id"], (None, None))

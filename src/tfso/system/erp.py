@@ -16,7 +16,7 @@ from sqlalchemy import DateTime, Integer, String, select
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 from ..common.db import Database, JsonDoc
-from ..common.util import iso, new_id, utcnow
+from ..common.util import iso, new_id, qty_str, utcnow
 from .d365_client import D365Client
 from .masterdata import SeedMasterData
 
@@ -95,15 +95,16 @@ class SimulatedErp:
         erp_id = f"SO-{self._next('erp_so', 100000):08d}"
         total = Decimal(str(order.get("totals", {}).get("grandTotal", 0)))
         lines = []
+        warehouse = (order.get("shipping") or {}).get("shipFromWarehouse") or "WH-SAL"
         for ln in order["lines"]:
             item_no = ln["item"]["itemNumber"]
             qty = Decimal(str(ln["quantity"]["value"]))
-            avail = Decimal(str(self.md.inventory.get(item_no, 0))) if self.config.get("inventoryCheck", True) else qty
+            avail = Decimal(str(self.md.available(warehouse, item_no))) if self.config.get("inventoryCheck", True) else qty
             confirmed = min(qty, max(avail, Decimal(0)))
             if self.config.get("inventoryCheck", True):
-                self.md.inventory[item_no] = float(avail - confirmed)
+                self.md.consume(warehouse, item_no, float(confirmed))
             lines.append({"lineNumber": ln["lineNumber"], "itemNumber": item_no, "uom": ln["quantity"]["uom"],
-                          "ordered": str(qty), "confirmed": str(confirmed), "backordered": str(qty - confirmed),
+                          "ordered": qty_str(qty), "confirmed": qty_str(confirmed), "backordered": qty_str(qty - confirmed),
                           "shipped": "0", "delivered": "0", "invoiced": "0",
                           "unitPrice": str((ln.get("unitPrice") or {}).get("amount", 0)),
                           "erpLineId": f"{erp_id}-{ln['lineNumber']:03d}"})
@@ -185,7 +186,7 @@ class SimulatedErp:
 
     # ------------------------------------------------------------------ fulfilment simulation
     async def advance(self, order_id: str, to: str, lines: list[dict] | None = None,
-                      carrier: dict | None = None) -> list[dict]:
+                      carrier: dict | None = None, delivered_at: str | None = None) -> list[dict]:
         doc = self.get(order_id=order_id)
         if not doc:
             raise LookupError(order_id)
@@ -209,7 +210,7 @@ class SimulatedErp:
                     self._save(doc)
                     return events
             elif step == "DELIVERED":
-                events.append(self._deliver(doc))
+                events.append(self._deliver(doc, delivered_at))
             elif step == "INVOICED":
                 events.append(self._invoice(doc))
             else:
@@ -256,17 +257,20 @@ class SimulatedErp:
                             lines=[{"lineNumber": sl["lineNumber"], "shippedQuantity": sl["quantity"],
                                     "lots": sl["lots"]} for sl in ship_lines])
 
-    def _deliver(self, doc: dict) -> dict:
+    def _deliver(self, doc: dict, delivered_at: str | None = None) -> dict:
+        when = delivered_at or iso(utcnow())
         for sh in doc["shipments"]:
             if sh["status"] != "DELIVERED":
-                sh["status"], sh["deliveredAt"] = "DELIVERED", iso(utcnow())
-                sh["proofOfDelivery"] = {"receivedBy": "Receiving clerk", "receivedAt": iso(utcnow()), "exceptions": []}
+                sh["status"], sh["deliveredAt"] = "DELIVERED", when
+                sh["proofOfDelivery"] = {"receivedBy": "Receiving clerk", "receivedAt": when, "exceptions": []}
         for l in doc["lines"]:
             l["delivered"] = l["shipped"]
         last = doc["shipments"][-1] if doc["shipments"] else {}
-        return status_event("DELIVERED", "TMS", doc["orderId"], doc["erpSalesOrderId"], shipment=last,
-                            lines=[{"lineNumber": l["lineNumber"], "deliveredQuantity": l["delivered"]}
-                                   for l in doc["lines"]])
+        ev = status_event("DELIVERED", "TMS", doc["orderId"], doc["erpSalesOrderId"], shipment=last,
+                          lines=[{"lineNumber": l["lineNumber"], "deliveredQuantity": l["delivered"]}
+                                 for l in doc["lines"]])
+        ev["occurredAt"] = when
+        return ev
 
     def _invoice(self, doc: dict) -> dict:
         n = self._next("invoice", 700000)

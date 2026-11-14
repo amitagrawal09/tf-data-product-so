@@ -18,6 +18,7 @@ This repository implements the Sales Order data product described in the *Taylor
 | 4 | Azure reference architecture | [`docs/04-azure-reference-architecture.md`](docs/04-azure-reference-architecture.md), IaC in [`infra/`](infra/), Databricks in [`databricks/`](databricks/) |
 | 5 | Single end-to-end deploy script | [`deploy.sh`](deploy.sh) (`local`, `docker`, `azure`, `test`, `destroy`) |
 | 6 | Front end for testing order processing | [`frontend/`](frontend/) (Order Operations Console) |
+| – | Product strategy (CPO view): north star, regional operating model, roadmap | [`docs/05-product-strategy.md`](docs/05-product-strategy.md) |
 | – | Binding solution blueprint (contracts, routes, env vars) | [`docs/00-solution-blueprint.md`](docs/00-solution-blueprint.md) |
 
 ## Quick start (local, about 1 minute)
@@ -32,7 +33,7 @@ This command:
 - starts the System (:8003), Process (:8002) and Experience (:8001) APIs, plus a gateway (:8080) that stands in for API Management and hosts the console;
 - runs the end-to-end smoke test.
 
-Then open **http://localhost:8080/**. The API key is `local-dev-key`.
+Then open **http://localhost:8080/**. To load realistic activity across every region, channel and account type, run `./deploy.sh demo-data` (Windows: `.\deploy.ps1 demo-data`). The API key is `local-dev-key`.
 
 ```bash
 ./deploy.sh test
@@ -75,6 +76,16 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 Interactive API docs (OpenAPI): http://localhost:8002/docs (Process / Order Status API), `:8001/docs` (Experience) and `:8003/docs` (System).
 
 ## Try it in the console
+
+**Regional and national operations.** Use the **Scope** selector in the top bar to choose National (all regions), a region (West, Southwest, Central, Southeast, Northeast) or a single processing site, and **Accounts** to choose national or regional accounts. The dashboard, orders, exceptions, orders at risk and marketplace all follow that scope.
+
+Each order is sourced to the site that can fill it, and the order page explains why. The dashboard shows:
+
+- the **perfect order rate** (touchless + on time + in full), OTIF, fill rate and revenue;
+- a regional comparison table that drills down to sites;
+- the orders-at-risk list.
+
+The region and site network in the seed data is illustrative. Replace it with the real facility list before a pilot.
 
 1. **New order → Customer portal.** Submit an order. It runs RECEIVED → INGESTED → VALIDATED → ENRICHED → PUBLISHED → SUBMITTED_TO_ERP, then D365 accepts it.
 2. **Order detail → Fulfillment simulator.** Release, pick, pack, ship (in full or in part), deliver, invoice. The milestone stepper and the **History** tab update from the real status events.

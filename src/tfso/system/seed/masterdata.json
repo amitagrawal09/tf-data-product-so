@@ -29,7 +29,15 @@
           "email": "orders@freshmart.example",
           "phone": "555-0101"
         }
-      ]
+      ],
+      "regions": [
+        "CENTRAL",
+        "NORTHEAST",
+        "SOUTHEAST",
+        "WEST"
+      ],
+      "accountScope": "NATIONAL",
+      "homeRegion": null
     },
     {
       "customerId": "C-1002",
@@ -61,7 +69,14 @@
           "email": "purchasing@sunrisefs.example",
           "phone": "555-0202"
         }
-      ]
+      ],
+      "regions": [
+        "SOUTHEAST",
+        "SOUTHWEST",
+        "WEST"
+      ],
+      "accountScope": "NATIONAL",
+      "homeRegion": null
     },
     {
       "customerId": "C-1003",
@@ -92,7 +107,12 @@
           "email": "kitchen@greenleafcafe.example",
           "phone": "555-0303"
         }
-      ]
+      ],
+      "regions": [
+        "WEST"
+      ],
+      "accountScope": "REGIONAL",
+      "homeRegion": "WEST"
     },
     {
       "customerId": "C-1004",
@@ -112,7 +132,10 @@
       "priceGroup": "LIST",
       "creditLimit": 0,
       "openAr": 0,
-      "blockedReason": "Account closed"
+      "blockedReason": "Account closed",
+      "regions": [],
+      "accountScope": "REGIONAL",
+      "homeRegion": null
     },
     {
       "customerId": "C-1005",
@@ -141,7 +164,47 @@
           "email": "supply@bayside.example",
           "phone": "555-0505"
         }
-      ]
+      ],
+      "regions": [
+        "WEST"
+      ],
+      "accountScope": "REGIONAL",
+      "homeRegion": "WEST"
+    },
+    {
+      "customerId": "C-1006",
+      "name": "Metro Fresh Markets",
+      "active": true,
+      "erpAccount": "US-1006",
+      "invoiceAccount": "US-1006",
+      "segment": "RETAIL",
+      "channels": [
+        "PORTAL",
+        "EMAIL"
+      ],
+      "currency": "USD",
+      "paymentTerms": {
+        "code": "Net30",
+        "description": "Net 30 days",
+        "netDays": 30
+      },
+      "priceGroup": "LIST",
+      "creditLimit": 80000,
+      "openAr": 12000,
+      "salesResponsible": "Casey Morgan",
+      "contacts": [
+        {
+          "role": "BD",
+          "name": "Dana Brooks",
+          "email": "buying@metrofresh.example",
+          "phone": "555-0606"
+        }
+      ],
+      "regions": [
+        "NORTHEAST"
+      ],
+      "accountScope": "REGIONAL",
+      "homeRegion": "NORTHEAST"
     }
   ],
   "shipTos": [
@@ -174,7 +237,8 @@
       "warehouse": "WH-SAL",
       "deliveryMode": "TRUCK-REEFER",
       "temperatureZone": "REFRIGERATED",
-      "appointmentRequired": true
+      "appointmentRequired": true,
+      "region": "WEST"
     },
     {
       "shipToId": "ST-1001-02",
@@ -202,7 +266,8 @@
       "warehouse": "WH-SAL",
       "deliveryMode": "TRUCK-REEFER",
       "temperatureZone": "REFRIGERATED",
-      "appointmentRequired": true
+      "appointmentRequired": true,
+      "region": "WEST"
     },
     {
       "shipToId": "ST-1002-01",
@@ -232,13 +297,14 @@
       "warehouse": "WH-SAL",
       "deliveryMode": "TRUCK-REEFER",
       "temperatureZone": "REFRIGERATED",
-      "appointmentRequired": false
+      "appointmentRequired": false,
+      "region": "WEST"
     },
     {
       "shipToId": "ST-1002-02",
       "customerId": "C-1002",
       "name": "Sunrise Phoenix DC",
-      "active": false,
+      "active": true,
       "erpLocationId": "000013002",
       "ediLocationCode": "SF-PHX",
       "address": {
@@ -253,10 +319,11 @@
         "TUE",
         "THU"
       ],
-      "site": "TRACY",
-      "warehouse": "WH-TRC",
+      "site": "YUMA",
+      "warehouse": "WH-YUM",
       "deliveryMode": "TRUCK-REEFER",
-      "temperatureZone": "REFRIGERATED"
+      "temperatureZone": "REFRIGERATED",
+      "region": "SOUTHWEST"
     },
     {
       "shipToId": "ST-1003-01",
@@ -283,7 +350,8 @@
       "site": "SALINAS",
       "warehouse": "WH-SAL",
       "deliveryMode": "TRUCK-REEFER",
-      "temperatureZone": "REFRIGERATED"
+      "temperatureZone": "REFRIGERATED",
+      "region": "WEST"
     },
     {
       "shipToId": "ST-1003-02",
@@ -308,7 +376,8 @@
       "site": "SALINAS",
       "warehouse": "WH-SAL",
       "deliveryMode": "VAN-REEFER",
-      "temperatureZone": "REFRIGERATED"
+      "temperatureZone": "REFRIGERATED",
+      "region": "WEST"
     },
     {
       "shipToId": "ST-1005-01",
@@ -334,10 +403,195 @@
         "SUN"
       ],
       "receivingHours": "00:00-23:59",
-      "site": "TRACY",
-      "warehouse": "WH-TRC",
+      "site": "SALINAS",
+      "warehouse": "WH-SAL",
       "deliveryMode": "TRUCK-REEFER",
-      "temperatureZone": "REFRIGERATED"
+      "temperatureZone": "REFRIGERATED",
+      "region": "WEST"
+    },
+    {
+      "shipToId": "ST-1001-03",
+      "customerId": "C-1001",
+      "name": "FreshMart DC 40 Dallas",
+      "active": true,
+      "erpLocationId": "000012003",
+      "ediLocationCode": "FM-DC40",
+      "gln": "0614141000036",
+      "address": {
+        "line1": "4000 Logistics Blvd",
+        "city": "Dallas",
+        "stateProvince": "TX",
+        "postalCode": "75241",
+        "country": "US"
+      },
+      "transitDays": 1,
+      "deliveryDays": [
+        "MON",
+        "TUE",
+        "WED",
+        "THU",
+        "FRI",
+        "SAT"
+      ],
+      "receivingHours": "04:00-14:00",
+      "deliveryMode": "TRUCK-REEFER",
+      "temperatureZone": "REFRIGERATED",
+      "appointmentRequired": true,
+      "region": "CENTRAL",
+      "site": "DALLAS",
+      "warehouse": "WH-DAL"
+    },
+    {
+      "shipToId": "ST-1001-04",
+      "customerId": "C-1001",
+      "name": "FreshMart DC 55 Edison",
+      "active": true,
+      "erpLocationId": "000012004",
+      "ediLocationCode": "FM-DC55",
+      "gln": "0614141000043",
+      "address": {
+        "line1": "55 Raritan Center Pkwy",
+        "city": "Edison",
+        "stateProvince": "NJ",
+        "postalCode": "08837",
+        "country": "US"
+      },
+      "transitDays": 1,
+      "deliveryDays": [
+        "MON",
+        "TUE",
+        "WED",
+        "THU",
+        "FRI",
+        "SAT"
+      ],
+      "receivingHours": "03:00-13:00",
+      "deliveryMode": "TRUCK-REEFER",
+      "temperatureZone": "REFRIGERATED",
+      "appointmentRequired": true,
+      "region": "NORTHEAST",
+      "site": "NEWJERSEY",
+      "warehouse": "WH-NJ"
+    },
+    {
+      "shipToId": "ST-1001-05",
+      "customerId": "C-1001",
+      "name": "FreshMart DC 70 Lakeland",
+      "active": true,
+      "erpLocationId": "000012005",
+      "ediLocationCode": "FM-DC70",
+      "gln": "0614141000050",
+      "address": {
+        "line1": "70 Commerce Dr",
+        "city": "Lakeland",
+        "stateProvince": "FL",
+        "postalCode": "33801",
+        "country": "US"
+      },
+      "transitDays": 1,
+      "deliveryDays": [
+        "MON",
+        "TUE",
+        "WED",
+        "THU",
+        "FRI",
+        "SAT"
+      ],
+      "receivingHours": "04:00-12:00",
+      "deliveryMode": "TRUCK-REEFER",
+      "temperatureZone": "REFRIGERATED",
+      "appointmentRequired": true,
+      "region": "SOUTHEAST",
+      "site": "ORLANDO",
+      "warehouse": "WH-ORL"
+    },
+    {
+      "shipToId": "ST-1002-03",
+      "customerId": "C-1002",
+      "name": "Sunrise Atlanta DC",
+      "active": true,
+      "erpLocationId": "000013003",
+      "ediLocationCode": "SF-ATL",
+      "gln": "0614141000128",
+      "address": {
+        "line1": "900 Fulton Industrial Blvd",
+        "city": "Atlanta",
+        "stateProvince": "GA",
+        "postalCode": "30336",
+        "country": "US"
+      },
+      "transitDays": 1,
+      "deliveryDays": [
+        "MON",
+        "TUE",
+        "WED",
+        "THU",
+        "FRI"
+      ],
+      "receivingHours": "03:00-12:00",
+      "deliveryMode": "TRUCK-REEFER",
+      "temperatureZone": "REFRIGERATED",
+      "appointmentRequired": false,
+      "region": "SOUTHEAST",
+      "site": "ORLANDO",
+      "warehouse": "WH-ORL"
+    },
+    {
+      "shipToId": "ST-1006-01",
+      "customerId": "C-1006",
+      "name": "Metro Fresh Philadelphia",
+      "active": true,
+      "erpLocationId": "000016001",
+      "address": {
+        "line1": "300 Food Center Dr",
+        "city": "Philadelphia",
+        "stateProvince": "PA",
+        "postalCode": "19148",
+        "country": "US"
+      },
+      "transitDays": 1,
+      "deliveryDays": [
+        "MON",
+        "TUE",
+        "WED",
+        "THU",
+        "FRI",
+        "SAT"
+      ],
+      "receivingHours": "05:00-12:00",
+      "deliveryMode": "TRUCK-REEFER",
+      "temperatureZone": "REFRIGERATED",
+      "appointmentRequired": false,
+      "region": "NORTHEAST",
+      "site": "NEWJERSEY",
+      "warehouse": "WH-NJ"
+    },
+    {
+      "shipToId": "ST-1006-02",
+      "customerId": "C-1006",
+      "name": "Metro Fresh Baltimore",
+      "active": true,
+      "erpLocationId": "000016002",
+      "address": {
+        "line1": "12 Harbor Point",
+        "city": "Baltimore",
+        "stateProvince": "MD",
+        "postalCode": "21231",
+        "country": "US"
+      },
+      "transitDays": 1,
+      "deliveryDays": [
+        "MON",
+        "WED",
+        "FRI"
+      ],
+      "receivingHours": "05:00-11:00",
+      "deliveryMode": "TRUCK-REEFER",
+      "temperatureZone": "REFRIGERATED",
+      "appointmentRequired": false,
+      "region": "NORTHEAST",
+      "site": "NEWJERSEY",
+      "warehouse": "WH-NJ"
     }
   ],
   "items": [
@@ -697,6 +951,11 @@
       "customerId": "C-1001",
       "buyerItemNumber": "FM-61001",
       "itemNumber": "TF-20001"
+    },
+    {
+      "customerId": "C-1001",
+      "buyerItemNumber": "FM-40100",
+      "itemNumber": "TF-40001"
     }
   ],
   "tradingPartners": [
@@ -733,26 +992,60 @@
       }
     }
   ],
-  "inventory": {
-    "TF-10001": 5000,
-    "TF-10002": 3000,
-    "TF-20001": 4000,
-    "TF-20002": 2500,
-    "TF-30001": 3000,
-    "TF-30002": 1500,
-    "TF-40001": 20,
-    "TF-50001": 800
-  },
   "warehouses": [
     {
       "warehouse": "WH-SAL",
       "site": "SALINAS",
-      "name": "Salinas Processing"
+      "name": "Salinas Processing",
+      "region": "WEST"
     },
     {
       "warehouse": "WH-TRC",
       "site": "TRACY",
-      "name": "Tracy Processing"
+      "name": "Tracy Processing",
+      "region": "WEST"
+    },
+    {
+      "warehouse": "WH-YUM",
+      "site": "YUMA",
+      "name": "Yuma Processing",
+      "region": "SOUTHWEST"
+    },
+    {
+      "warehouse": "WH-DAL",
+      "site": "DALLAS",
+      "name": "Dallas Processing",
+      "region": "CENTRAL"
+    },
+    {
+      "warehouse": "WH-CHI",
+      "site": "CHICAGO",
+      "name": "Chicago Processing",
+      "region": "CENTRAL"
+    },
+    {
+      "warehouse": "WH-ORL",
+      "site": "ORLANDO",
+      "name": "Orlando Processing",
+      "region": "SOUTHEAST"
+    },
+    {
+      "warehouse": "WH-TN",
+      "site": "TENNESSEE",
+      "name": "Tennessee Processing",
+      "region": "SOUTHEAST"
+    },
+    {
+      "warehouse": "WH-NJ",
+      "site": "NEWJERSEY",
+      "name": "New Jersey Processing",
+      "region": "NORTHEAST"
+    },
+    {
+      "warehouse": "WH-MD",
+      "site": "MARYLAND",
+      "name": "Maryland Processing",
+      "region": "NORTHEAST"
     }
   ],
   "carriers": [
@@ -764,5 +1057,224 @@
       "scac": "VLYX",
       "name": "Valley Reefer Express"
     }
-  ]
+  ],
+  "_note": "Illustrative reference data for local/non-prod use. Regions, sites, customers and inventory are sample values - replace with the actual Taylor Farms facility network and D365 master data.",
+  "regions": [
+    {
+      "regionId": "WEST",
+      "name": "West",
+      "adjacentRegions": [
+        "SOUTHWEST",
+        "CENTRAL"
+      ],
+      "sites": [
+        {
+          "siteId": "SALINAS",
+          "warehouse": "WH-SAL",
+          "name": "Salinas Processing",
+          "city": "Salinas",
+          "stateProvince": "CA",
+          "primary": true
+        },
+        {
+          "siteId": "TRACY",
+          "warehouse": "WH-TRC",
+          "name": "Tracy Processing",
+          "city": "Tracy",
+          "stateProvince": "CA",
+          "primary": false
+        }
+      ]
+    },
+    {
+      "regionId": "SOUTHWEST",
+      "name": "Southwest",
+      "adjacentRegions": [
+        "WEST",
+        "CENTRAL"
+      ],
+      "sites": [
+        {
+          "siteId": "YUMA",
+          "warehouse": "WH-YUM",
+          "name": "Yuma Processing",
+          "city": "Yuma",
+          "stateProvince": "AZ",
+          "primary": true
+        }
+      ]
+    },
+    {
+      "regionId": "CENTRAL",
+      "name": "Central",
+      "adjacentRegions": [
+        "SOUTHWEST",
+        "SOUTHEAST",
+        "NORTHEAST",
+        "WEST"
+      ],
+      "sites": [
+        {
+          "siteId": "DALLAS",
+          "warehouse": "WH-DAL",
+          "name": "Dallas Processing",
+          "city": "Dallas",
+          "stateProvince": "TX",
+          "primary": true
+        },
+        {
+          "siteId": "CHICAGO",
+          "warehouse": "WH-CHI",
+          "name": "Chicago Processing",
+          "city": "Chicago",
+          "stateProvince": "IL",
+          "primary": false
+        }
+      ]
+    },
+    {
+      "regionId": "SOUTHEAST",
+      "name": "Southeast",
+      "adjacentRegions": [
+        "CENTRAL",
+        "NORTHEAST"
+      ],
+      "sites": [
+        {
+          "siteId": "ORLANDO",
+          "warehouse": "WH-ORL",
+          "name": "Orlando Processing",
+          "city": "Orlando",
+          "stateProvince": "FL",
+          "primary": true
+        },
+        {
+          "siteId": "TENNESSEE",
+          "warehouse": "WH-TN",
+          "name": "Tennessee Processing",
+          "city": "Smyrna",
+          "stateProvince": "TN",
+          "primary": false
+        }
+      ]
+    },
+    {
+      "regionId": "NORTHEAST",
+      "name": "Northeast",
+      "adjacentRegions": [
+        "SOUTHEAST",
+        "CENTRAL"
+      ],
+      "sites": [
+        {
+          "siteId": "NEWJERSEY",
+          "warehouse": "WH-NJ",
+          "name": "New Jersey Processing",
+          "city": "Swedesboro",
+          "stateProvince": "NJ",
+          "primary": true
+        },
+        {
+          "siteId": "MARYLAND",
+          "warehouse": "WH-MD",
+          "name": "Maryland Processing",
+          "city": "Annapolis Junction",
+          "stateProvince": "MD",
+          "primary": false
+        }
+      ]
+    }
+  ],
+  "inventoryBySite": {
+    "WH-SAL": {
+      "TF-10001": 5000,
+      "TF-10002": 3000,
+      "TF-20001": 4000,
+      "TF-20002": 2500,
+      "TF-30001": 3000,
+      "TF-30002": 1500,
+      "TF-40001": 20,
+      "TF-50001": 800
+    },
+    "WH-TRC": {
+      "TF-10001": 2000,
+      "TF-10002": 1200,
+      "TF-20001": 1600,
+      "TF-20002": 1000,
+      "TF-30001": 1200,
+      "TF-30002": 600,
+      "TF-40001": 0,
+      "TF-50001": 320
+    },
+    "WH-YUM": {
+      "TF-10001": 2500,
+      "TF-10002": 0,
+      "TF-20001": 2000,
+      "TF-20002": 1250,
+      "TF-30001": 1500,
+      "TF-30002": 750,
+      "TF-40001": 0,
+      "TF-50001": 400
+    },
+    "WH-DAL": {
+      "TF-10001": 3000,
+      "TF-10002": 1800,
+      "TF-20001": 2400,
+      "TF-20002": 1500,
+      "TF-30001": 1800,
+      "TF-30002": 0,
+      "TF-40001": 0,
+      "TF-50001": 480
+    },
+    "WH-CHI": {
+      "TF-10001": 1500,
+      "TF-10002": 900,
+      "TF-20001": 1200,
+      "TF-20002": 750,
+      "TF-30001": 900,
+      "TF-30002": 450,
+      "TF-40001": 0,
+      "TF-50001": 240
+    },
+    "WH-ORL": {
+      "TF-10001": 2500,
+      "TF-10002": 1500,
+      "TF-20001": 2000,
+      "TF-20002": 1250,
+      "TF-30001": 1500,
+      "TF-30002": 750,
+      "TF-40001": 0,
+      "TF-50001": 0
+    },
+    "WH-TN": {
+      "TF-10001": 1500,
+      "TF-10002": 900,
+      "TF-20001": 1200,
+      "TF-20002": 750,
+      "TF-30001": 900,
+      "TF-30002": 450,
+      "TF-40001": 0,
+      "TF-50001": 240
+    },
+    "WH-NJ": {
+      "TF-10001": 2500,
+      "TF-10002": 40,
+      "TF-20001": 2000,
+      "TF-20002": 1250,
+      "TF-30001": 1500,
+      "TF-30002": 750,
+      "TF-40001": 0,
+      "TF-50001": 400
+    },
+    "WH-MD": {
+      "TF-10001": 1500,
+      "TF-10002": 900,
+      "TF-20001": 1200,
+      "TF-20002": 750,
+      "TF-30001": 900,
+      "TF-30002": 450,
+      "TF-40001": 0,
+      "TF-50001": 240
+    }
+  }
 }

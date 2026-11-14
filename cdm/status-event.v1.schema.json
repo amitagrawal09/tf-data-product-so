@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://schemas.taylorfarms.example/sales-order/status-event.v1.json",
   "title": "Inbound status event from Tier-3 systems",
-  "x-cdm-version": "1.0.0",
+  "x-cdm-version": "1.1.0",
   "$defs": {
     "ErpReference": {
       "properties": {

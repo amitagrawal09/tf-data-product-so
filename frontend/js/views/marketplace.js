@@ -1,7 +1,8 @@
 // Data marketplace: catalog of governed datasets (Sales Orders, lines, history, shipments, invoices, KPIs,
 // customers, ship-tos, items, prices, partners) with definitions, lineage, refresh SLAs, preview, export and
 // access requests. Every action is fulfilled by the Experience → Process / System APIs.
-import { api, download, loadSettings } from "../api.js";
+import { api, download, loadSettings, scope } from "../api.js";
+import { scopePill, regionName } from "../scope.js";
 import { html, raw, setHTML, $, $$, toast, errorBox, loading, fmtDate, fmtNum, esc } from "../ui.js";
 
 const ID_KEY = "tfso.consumer";
@@ -44,7 +45,8 @@ export async function mount(el, id, tab) {
   const me = identity();
   setHTML(el, html`
     <div class="page-head"><div><h1>Data marketplace</h1>
-      <div class="sub">Governed datasets from the Sales Order data product and the master data it depends on. Find data, read its definition and lineage, check freshness, then preview, request access and export. Every request is fulfilled by the Experience → Process / System APIs.</div></div>
+      <div class="sub">Governed datasets from the Sales Order data product and the master data it depends on. Find data, read its definition and lineage, check freshness, then preview, request access and export. Every request is fulfilled by the Experience → Process / System APIs.</div>
+      <div class="section-gap">${scopePill()} <span class="small muted">Regional and account filters on order datasets default to this scope.</span></div></div>
       <div class="identity card" style="padding:8px 12px"><div class="small muted">Consuming as</div>
         <div><strong id="who">${me.userId}</strong> <span class="small muted">${me.team}</span> <button class="btn sm" id="changeWho">Change</button></div></div>
     </div>
@@ -262,13 +264,18 @@ function lineage(host) {
 
 /* ---------- filters shared by preview / export ---------- */
 function filterFields() {
+  // Order datasets accept region / accountScope: default them from the global operating scope.
+  const g = scope();
+  const defaults = { region: g.region || "", accountScope: g.accountScope || "", site: g.site || "" };
   return (ds.filters || []).map(f => {
     const id = `f-${f.name}`;
+    const def = defaults[f.name] || "";
+    const label = v => (f.name === "region" ? regionName(v) || v : v);
     let input;
-    if (f.type === "enum") input = html`<select id="${id}" data-filter="${f.name}"><option value="">Any</option>${f.values.map(v => html`<option>${v}</option>`)}</select>`;
+    if (f.type === "enum") input = html`<select id="${id}" data-filter="${f.name}"><option value="">Any</option>${(f.values || []).map(v => html`<option value="${v}" ${v === def ? raw("selected") : ""}>${label(v)}</option>`)}</select>`;
     else if (f.type === "boolean") input = html`<select id="${id}" data-filter="${f.name}"><option value="">Any</option><option value="true">Yes</option><option value="false">No</option></select>`;
-    else input = html`<input id="${id}" data-filter="${f.name}" type="${f.type === "date" ? "date" : f.type === "datetime" ? "datetime-local" : "text"}" placeholder="${f.help || ""}">`;
-    return html`<div class="field"><label for="${id}">${f.label}</label>${input}</div>`;
+    else input = html`<input id="${id}" data-filter="${f.name}" value="${def}" type="${f.type === "date" ? "date" : f.type === "datetime" ? "datetime-local" : "text"}" placeholder="${f.help || ""}">`;
+    return html`<div class="field"><label for="${id}">${f.label}${def ? html` <span class="small muted">(from scope)</span>` : ""}</label>${input}</div>`;
   });
 }
 function readFilters(host) {

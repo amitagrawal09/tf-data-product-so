@@ -1,7 +1,9 @@
-import { api, items } from "../api.js";
+import { api, items, scopeQuery } from "../api.js";
 import { html, setHTML, $, fmtDate, fmtMoney, statusBadge, errorBox, loading, humanize, STATUSES, CATEGORIES, CHANNELS } from "../ui.js";
+import { regionsLoaded, regionName, scopePill } from "../scope.js";
 
-const FIELDS = ["status", "statusCategory", "channel", "customerId", "customerPo", "erpSalesOrderId", "q", "fromDate", "toDate", "hasExceptions", "sort", "page", "pageSize"];
+// `region` in the URL overrides the global operating scope; "ALL" means national (ignore the global region/site).
+const FIELDS = ["region", "accountScope", "status", "statusCategory", "channel", "customerId", "customerPo", "erpSalesOrderId", "q", "fromDate", "toDate", "hasExceptions", "sort", "page", "pageSize"];
 
 export async function mount(el, qs) {
   const params = new URLSearchParams(qs || "");
@@ -10,12 +12,20 @@ export async function mount(el, qs) {
   f.pageSize = Number(f.pageSize) || 25;
   f.sort = f.sort || "-receivedAt";
   const opt = (list, sel) => list.map(v => html`<option value="${v}" ${v === sel ? "selected" : ""}>${humanize(v)}</option>`);
+  const global = scopeQuery();
+  const effRegion = f.region || global.region || "";
+  const effAcct = f.accountScope || global.accountScope || "";
 
   setHTML(el, html`
-    <div class="page-head"><div><h1>Orders</h1><div class="sub">Search the Order Status API (<span class="mono">GET /process/v1/orders</span>)</div></div>
+    <div class="page-head"><div><h1>Orders</h1><div class="sub">Search the Order Status API (<span class="mono">GET /process/v1/orders</span>) · ${scopePill()}</div></div>
       <a class="btn primary" href="#/new">New order</a></div>
     <form class="card" id="search">
       <div class="fields">
+        <div class="field"><label for="region">Region</label><select id="region">
+          <option value="ALL" ${effRegion === "" || effRegion === "ALL" ? "selected" : ""}>National (all regions)</option>
+          ${regionsLoaded().map(r => html`<option value="${r.regionId}" ${r.regionId === effRegion ? "selected" : ""}>${r.name}</option>`)}</select></div>
+        <div class="field"><label for="accountScope">Accounts</label><select id="accountScope">
+          ${[["ALL", "All accounts"], ["NATIONAL", "National accounts"], ["REGIONAL", "Regional accounts"]].map(([v, l]) => html`<option value="${v}" ${(effAcct || "ALL") === v ? "selected" : ""}>${l}</option>`)}</select></div>
         <div class="field"><label for="q">Search</label><input id="q" value="${f.q}" placeholder="Order id, PO, customer…"></div>
         <div class="field"><label for="status">Status</label><select id="status"><option value="">Any</option>${opt(STATUSES, f.status)}</select></div>
         <div class="field"><label for="statusCategory">Category</label><select id="statusCategory"><option value="">Any</option>${opt(CATEGORIES, f.statusCategory)}</select></div>
@@ -40,8 +50,12 @@ export async function mount(el, qs) {
   $("#search", el).addEventListener("submit", e => { e.preventDefault(); go(el, 1); });
   $("#reset", el).addEventListener("click", () => { location.hash = "#/orders"; });
 
-  const query = {};
+  // Global scope first, then explicit URL filters ("ALL" clears the global value).
+  const query = { ...global };
   for (const k of FIELDS) if (f[k] !== "" && f[k] !== undefined) query[k] = f[k];
+  if (f.region && f.region !== global.region) delete query.site; // site belongs to the global region
+  for (const k of ["region", "accountScope"]) if (query[k] === "ALL") delete query[k];
+  if (!query.region) delete query.site;
   const host = $("#results", el);
   try {
     const r = await api.process("/v1/orders", { query });
@@ -51,14 +65,16 @@ export async function mount(el, qs) {
     if (!list.length) { setHTML(host, html`<div class="card empty">No orders match these filters.</div>`); return; }
     setHTML(host, html`
       <div class="table-wrap"><table>
-        <thead><tr><th>Order</th><th>Status</th><th>Channel</th><th>Customer</th><th>PO</th><th>D365 SO</th>
+        <thead><tr><th>Order</th><th>Status</th><th>Channel</th><th>Customer</th><th>Region</th><th>Site</th><th>PO</th><th>D365 SO</th>
           <th>Delivery</th><th>Received</th><th>Updated</th><th class="num">Total</th><th>Exc.</th><th>Touchless</th></tr></thead>
         <tbody>${list.map(o => html`<tr class="clickable" data-id="${o.orderId}">
           <td class="mono nowrap"><a href="#/orders/${encodeURIComponent(o.orderId)}">${o.orderId}</a>
             ${o.orderGroupId && o.orderGroupId !== o.orderId ? html`<div class="small muted">grp ${o.orderGroupId}</div>` : ""}</td>
           <td>${statusBadge(o.status, o.statusCategory)}</td>
           <td>${o.sourceChannel || ""}</td>
-          <td>${o.customerName || ""}<div class="small muted">${o.customerId || ""}</div></td>
+          <td>${o.customerName || ""}<div class="small muted">${o.customerId || ""}${o.accountScope === "NATIONAL" ? " · national account" : ""}</div></td>
+          <td class="nowrap">${o.regionName || regionName(o.region) || "–"}${o.crossRegion ? html`<div><span class="tag" title="Shipped from outside the home region">cross-region</span></div>` : ""}</td>
+          <td class="mono small nowrap">${o.shipFromWarehouse || "–"}</td>
           <td>${o.customerPo || ""}</td><td class="mono">${o.erpSalesOrderId || "–"}</td>
           <td class="nowrap">${fmtDate(o.requestedDeliveryDate)}</td>
           <td class="nowrap">${fmtDate(o.receivedAt)}</td><td class="nowrap">${fmtDate(o.updatedAt)}</td>

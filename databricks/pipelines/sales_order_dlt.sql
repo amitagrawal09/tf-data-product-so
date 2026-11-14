@@ -120,7 +120,10 @@ AS SELECT
                         quantity: STRUCT<value: STRING, uom: STRING>, status: STRING,
                         quantities: MAP<STRING, STRING>,
                         lots: ARRAY<STRUCT<lotNumber: STRING, quantity: STRING, traceabilityLotCode: STRING>>>>,
-     totals STRUCT<grandTotal: STRING, currency: STRING>') AS order_doc,
+     totals STRUCT<grandTotal: STRING, currency: STRING>,
+     fulfillment STRUCT<regionId: STRING, regionName: STRING, customerRegionId: STRING, siteId: STRING,
+                        warehouse: STRING, siteName: STRING, accountScope: STRING, crossRegion: BOOLEAN,
+                        sourcing: STRUCT<rule: STRING, reason: STRING>>') AS order_doc,
   snapshot_json
 FROM STREAM(LIVE.silver_order_history)
 WHERE snapshot_json IS NOT NULL;
@@ -218,3 +221,45 @@ SELECT
   ${tfso.cost_of_capital_annual}                                                   AS cost_of_capital_annual
 FROM base
 GROUP BY ALL;
+
+
+-- ------------------------------------------------------------------ GOLD: regional & national operations (CDM 1.1)
+-- Latest snapshot per order → service levels by region / site / account scope. "National" = all rows.
+CREATE OR REFRESH MATERIALIZED VIEW gold_order_latest
+COMMENT 'Latest canonical snapshot per order with regional fulfilment attributes.'
+AS SELECT * EXCEPT (rn) FROM (
+  SELECT order_id, sequence, occurred_at, to_status AS status, order_doc,
+         order_doc.fulfillment.regionId      AS region,
+         order_doc.fulfillment.warehouse     AS ship_from_warehouse,
+         order_doc.fulfillment.accountScope  AS account_scope,
+         order_doc.fulfillment.crossRegion   AS cross_region,
+         CAST(order_doc.totals.grandTotal AS DECIMAL(14,2)) AS total_amount,
+         ROW_NUMBER() OVER (PARTITION BY order_id ORDER BY sequence DESC) AS rn
+  FROM LIVE.silver_order_snapshots)
+WHERE rn = 1;
+
+CREATE OR REFRESH MATERIALIZED VIEW gold_regional_performance
+COMMENT 'Orders, revenue, OTIF, fill rate and cross-region sourcing by region, site and account scope (NULL region/site rows = national roll-up).'
+AS
+WITH lines AS (
+  SELECT o.region, o.ship_from_warehouse, o.account_scope, o.order_id, o.status, o.total_amount, o.cross_region,
+         o.order_doc.dates.requestedDeliveryDate AS requested_delivery_date,
+         SUM(CAST(l.quantities['ordered']   AS DOUBLE)) AS ordered_qty,
+         SUM(CAST(l.quantities['shipped']   AS DOUBLE)) AS shipped_qty,
+         SUM(CAST(l.quantities['delivered'] AS DOUBLE)) AS delivered_qty
+  FROM LIVE.gold_order_latest o LATERAL VIEW explode(o.order_doc.lines) x AS l
+  GROUP BY ALL
+), delivered AS (
+  SELECT h.order_id, MIN(h.occurred_at) AS delivered_at
+  FROM LIVE.silver_order_history h WHERE h.event_type = 'DELIVERED' GROUP BY h.order_id
+)
+SELECT region, ship_from_warehouse, account_scope,
+       COUNT(*)                                                                       AS orders,
+       SUM(CASE WHEN status NOT IN ('CANCELLED','REJECTED') THEN total_amount END)    AS revenue,
+       AVG(CASE WHEN d.delivered_at IS NOT NULL THEN
+             CASE WHEN to_date(d.delivered_at) <= to_date(requested_delivery_date) AND delivered_qty >= ordered_qty
+                  THEN 1.0 ELSE 0.0 END END)                                         AS otif_rate,
+       SUM(shipped_qty) / NULLIF(SUM(CASE WHEN shipped_qty > 0 THEN ordered_qty END), 0) AS fill_rate,
+       AVG(CASE WHEN cross_region THEN 1.0 ELSE 0.0 END)                              AS cross_region_rate
+FROM lines LEFT JOIN delivered d USING (order_id)
+GROUP BY GROUPING SETS ((region, ship_from_warehouse, account_scope), (region, account_scope), (account_scope), ());

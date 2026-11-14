@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://schemas.taylorfarms.example/sales-order/sales-order.v1.json",
   "title": "Canonical Sales Order",
-  "x-cdm-version": "1.0.0",
+  "x-cdm-version": "1.1.0",
   "$defs": {
     "AckTimestamps": {
       "properties": {
@@ -356,7 +356,7 @@
           "type": "string"
         },
         "contractVersion": {
-          "default": "1.0.0",
+          "default": "1.1.0",
           "title": "Contractversion",
           "type": "string"
         },
@@ -874,6 +874,117 @@
       "title": "ExtractionInfo",
       "type": "object"
     },
+    "Fulfillment": {
+      "description": "Where the order is fulfilled in the regional network (added in contract 1.1.0).",
+      "properties": {
+        "regionId": {
+          "description": "Fulfilling operating region, e.g. WEST, CENTRAL, NORTHEAST",
+          "title": "Regionid",
+          "type": "string"
+        },
+        "regionName": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Regionname"
+        },
+        "customerRegionId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Region the ship-to belongs to (demand region)",
+          "title": "Customerregionid"
+        },
+        "siteId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Siteid"
+        },
+        "warehouse": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "D365 warehouse that ships the order",
+          "title": "Warehouse"
+        },
+        "siteName": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sitename"
+        },
+        "accountScope": {
+          "anyOf": [
+            {
+              "enum": [
+                "NATIONAL",
+                "REGIONAL"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "NATIONAL accounts are served from more than one region",
+          "title": "Accountscope"
+        },
+        "crossRegion": {
+          "default": false,
+          "description": "Fulfilled outside the ship-to's home region",
+          "title": "Crossregion",
+          "type": "boolean"
+        },
+        "sourcing": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SourcingDecision"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "regionId"
+      ],
+      "title": "Fulfillment",
+      "type": "object"
+    },
     "HistoryEventType": {
       "enum": [
         "ORDER_RECEIVED",
@@ -881,6 +992,7 @@
         "VALIDATION_PASSED",
         "VALIDATION_FAILED",
         "ORDER_ENRICHED",
+        "ORDER_SOURCED",
         "ORDER_PUBLISHED",
         "ORDER_CORRECTED",
         "ORDER_RESUBMITTED",
@@ -3516,6 +3628,97 @@
       "title": "SourceInfo",
       "type": "object"
     },
+    "SourcingCandidate": {
+      "properties": {
+        "warehouse": {
+          "title": "Warehouse",
+          "type": "string"
+        },
+        "siteId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Siteid"
+        },
+        "regionId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Regionid"
+        },
+        "fillRate": {
+          "description": "Share of ordered quantity the site can fill from on-hand (0-1)",
+          "title": "Fillrate",
+          "type": "number"
+        },
+        "home": {
+          "default": false,
+          "description": "Primary site of the ship-to's region",
+          "title": "Home",
+          "type": "boolean"
+        },
+        "chosen": {
+          "default": false,
+          "title": "Chosen",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "warehouse",
+        "fillRate"
+      ],
+      "title": "SourcingCandidate",
+      "type": "object"
+    },
+    "SourcingDecision": {
+      "properties": {
+        "rule": {
+          "enum": [
+            "HOME_SITE",
+            "ALTERNATE_SITE_IN_REGION",
+            "CROSS_REGION",
+            "BEST_AVAILABLE"
+          ],
+          "title": "Rule",
+          "type": "string"
+        },
+        "reason": {
+          "title": "Reason",
+          "type": "string"
+        },
+        "decidedAt": {
+          "format": "date-time",
+          "title": "Decidedat",
+          "type": "string"
+        },
+        "candidates": {
+          "items": {
+            "$ref": "#/$defs/SourcingCandidate"
+          },
+          "title": "Candidates",
+          "type": "array"
+        }
+      },
+      "required": [
+        "rule",
+        "reason",
+        "decidedAt"
+      ],
+      "title": "SourcingDecision",
+      "type": "object"
+    },
     "StageTimestamps": {
       "properties": {
         "received": {
@@ -3888,7 +4091,7 @@
   "description": "Canonical Sales Order - the published record of the Sales Order data product.",
   "properties": {
     "schemaVersion": {
-      "default": "1.0.0",
+      "default": "1.1.0",
       "title": "Schemaversion",
       "type": "string"
     },
@@ -3967,6 +4170,18 @@
     },
     "shipping": {
       "$ref": "#/$defs/ShippingInstructions"
+    },
+    "fulfillment": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Fulfillment"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Regional network fulfilment and sourcing decision"
     },
     "lines": {
       "items": {

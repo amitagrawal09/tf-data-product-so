@@ -242,6 +242,11 @@ class OrderService:
         row.erp_created = bool(roi.get("stageTimestamps", {}).get("erpCreated"))
         row.receipt_to_erp_minutes = roi.get("cycleTimes", {}).get("receiptToErpMinutes")
         row.receipt_to_ship_hours = roi.get("cycleTimes", {}).get("receiptToShipHours")
+        ful = doc.get("fulfillment") or {}
+        row.region = ful.get("regionId") or ful.get("customerRegionId")
+        row.ship_from_warehouse = ful.get("warehouse") or (doc.get("shipping") or {}).get("shipFromWarehouse")
+        row.account_scope = ful.get("accountScope")
+        row.cross_region = bool(ful.get("crossRegion"))
         stored = {k: v for k, v in doc.items() if k != "orderHistory"}
         row.doc = copy.deepcopy(stored)
         s.flush()
@@ -455,6 +460,14 @@ class OrderService:
                 changes = [c for c in json_diff(before, doc) if not c["path"].startswith(("/audit", "/roi", "/status"))]
                 rec.record(H.ORDER_ENRICHED, to_status=S.ENRICHED, changes=changes[:200],
                            message=f"Applied customer, ship-to, item and pricing master data ({len(changes)} element(s))")
+                try:
+                    ful = await rules.source(doc, self.md)
+                except ApiError as exc:
+                    log.warning("sourcing deferred for %s: %s", order_id, exc.detail)
+                    return
+                rec.record(H.ORDER_SOURCED, reason_code=ful["sourcing"]["rule"],
+                           message=f"{ful['sourcing']['rule']}: {ful['siteName']} ({ful['regionName']}) - "
+                                   f"{ful['sourcing']['reason']}")
                 try:
                     SalesOrder.model_validate({**doc, "orderHistory": []})
                 except ValidationError as exc:
@@ -912,6 +925,7 @@ def _apply_changes(doc: dict, ch: dict[str, Any]) -> None:
         sid = ship.get("shipToId") or ship.get("partyId")
         doc["parties"]["shipTo"] = {"role": "SHIP_TO", "partyId": sid} if sid else {"role": "SHIP_TO", **ship}
         doc["dates"].pop("requestedShipDate", None)
+        doc.pop("fulfillment", None)
     sold = ch.get("customerId") or (ch.get("soldTo") or {}).get("partyId") or (ch.get("soldTo") or {}).get("customerId")
     if sold:
         doc["parties"]["soldTo"] = {"role": "SOLD_TO", "partyId": sold}

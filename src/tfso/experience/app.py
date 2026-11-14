@@ -107,14 +107,20 @@ def create_experience_app(settings: Settings | None = None) -> FastAPI:
     @app.get("/portal/v1/catalog/customers", tags=["portal"])
     async def catalog_customers():
         items = (await system.get_json("/v1/masterdata/customers"))["items"]
-        return {"items": [{k: c.get(k) for k in ("customerId", "name", "active", "segment", "channels", "currency")}
+        return {"items": [{k: c.get(k) for k in ("customerId", "name", "active", "segment", "channels", "currency",
+                                                 "accountScope", "regions", "homeRegion")}
                           for c in items]}
+
+    @app.get("/portal/v1/catalog/regions", tags=["portal"], summary="Operating regions and processing sites")
+    async def catalog_regions():
+        return await system.get_json("/v1/masterdata/regions")
 
     @app.get("/portal/v1/catalog/customers/{customer_id}/ship-tos", tags=["portal"])
     async def catalog_ship_tos(customer_id: str, request: Request):
         enforce_customer(request, customer_id)
         items = (await system.get_json(f"/v1/masterdata/customers/{customer_id}/ship-tos"))["items"]
         return {"items": [{"shipToId": s["shipToId"], "name": s["name"], "active": s["active"],
+                           "region": s.get("region"),
                            "address": {"city": (s.get("address") or {}).get("city"),
                                        "state": (s.get("address") or {}).get("stateProvince"),
                                        **(s.get("address") or {})},

@@ -35,6 +35,7 @@ function renderAccepted(host, resp, extra = "") {
         ${statusBadge(o.status, o.statusCategory)}<span class="spacer"></span>
         ${o.orderId ? html`<a class="btn sm" href="#/orders/${encodeURIComponent(o.orderId)}">Open order →</a>` : ""}</div>
       <div class="small muted section-gap">Group ${o.orderGroupId || "–"} · received ${o.receivedAt || "–"} · correlation ${o.correlationId || "–"}</div>
+      <div class="small section-gap" data-fulfil="${o.orderId || ""}">${fulfilLine(o)}</div>
       ${ex.length ? html`<div class="alert warn section-gap"><strong>${ex.length} data-quality exception(s) – order is in the exception queue</strong>
         <ul>${ex.map(x => html`<li>${sevBadge(x.severity)} <strong>${x.ruleId || x.code}</strong> ${x.lineNumber ? `line ${x.lineNumber}: ` : ""}${x.message || ""}</li>`)}</ul></div>`
         : html`<div class="alert ok section-gap">Passed all quality rules – published and sent to D365.</div>`}
@@ -42,6 +43,22 @@ function renderAccepted(host, resp, extra = "") {
   });
   setHTML(host, html`${blocks}${extra}`);
   host.scrollIntoView({ behavior: "smooth", block: "start" });
+  // Best effort: the fulfilment region / site is decided during enrichment - read it from the status view.
+  list.filter(o => o.orderId && !(o.region || o.shipFromWarehouse)).forEach(async o => {
+    try {
+      const st = await api.process(`/v1/orders/${encodeURIComponent(o.orderId)}/status`);
+      const node = host.querySelector(`[data-fulfil="${CSS.escape(o.orderId)}"]`);
+      if (node) setHTML(node, fulfilLine(st));
+    } catch { /* status not available yet */ }
+  });
+}
+
+const RULES = { HOME_SITE: "home site", ALTERNATE_SITE_IN_REGION: "alternate site in region", CROSS_REGION: "cross-region", BEST_AVAILABLE: "best available" };
+function fulfilLine(o) {
+  const region = o.regionName || o.region;
+  const wh = o.shipFromWarehouse;
+  if (!region && !wh) return "";
+  return html`<span class="muted">Fulfilment:</span> <strong>${region || "–"}</strong>${wh ? html` · ships from <span class="mono">${wh}</span>` : ""}${o.sourcingRule ? html` · <span class="tag">${RULES[o.sourcingRule] || o.sourcingRule}</span>` : ""}`;
 }
 
 async function submit(host, btn, fn) {

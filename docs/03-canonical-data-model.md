@@ -1082,3 +1082,23 @@ ROI tags of the same order:
 Full examples: `cdm/examples/sales-order.edi-invoiced.example.json` (complete order with 18 history entries),
 `order-status-view.example.json`, `order-group-history.example.json` (two-PO interchange, merged history),
 `order-status-changed.cloudevent.example.json`, `x12-850/997/855/856/810.edi`.
+
+
+## Addendum: contract 1.1.0, `fulfillment` (regional network)
+
+Version 1.1.0 is an **additive** minor release: v1.0 consumers keep working unchanged. It adds `SalesOrder.fulfillment`, which records where in the regional network the order is fulfilled and why.
+
+| Element | Type | Description |
+|---|---|---|
+| `fulfillment.regionId` | string | Fulfilling operating region (WEST, SOUTHWEST, CENTRAL, SOUTHEAST, NORTHEAST). Before sourcing it holds the demand region |
+| `fulfillment.regionName` | string | Display name |
+| `fulfillment.customerRegionId` | string | Region of the ship-to (demand region) |
+| `fulfillment.siteId` / `warehouse` / `siteName` | string | Processing site and D365 warehouse that ships the order |
+| `fulfillment.accountScope` | enum | NATIONAL (customer served from more than one region) or REGIONAL |
+| `fulfillment.crossRegion` | boolean | Fulfilled outside the ship-to's region |
+| `fulfillment.sourcing.rule` | enum | HOME_SITE, ALTERNATE_SITE_IN_REGION, CROSS_REGION, BEST_AVAILABLE |
+| `fulfillment.sourcing.reason` | string | Human-readable explanation |
+| `fulfillment.sourcing.decidedAt` | datetime | When the decision was made |
+| `fulfillment.sourcing.candidates[]` | array | `warehouse`, `siteId`, `regionId`, `fillRate` (0–1), `home`, `chosen` for every site evaluated |
+
+New history event type: `ORDER_SOURCED` (no status change; `reasonCode` = sourcing rule). The schema is regenerated in `cdm/sales-order.v1.schema.json` (`x-cdm-version: 1.1.0`).

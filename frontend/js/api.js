@@ -204,3 +204,45 @@ export async function download(layer, path, opts = {}) {
   record(call);
   return { ok: true, status: res.status, blob, filename: m ? m[1] : "export", headers: h };
 }
+
+/* ---------- operating scope (national / regional / site, account scope) -------------------
+ * Persisted per browser in localStorage `tfso.scope`; views pass scopeQuery() to the APIs.
+ */
+const SCOPE_KEY = "tfso.scope";
+const EMPTY_SCOPE = { region: "", site: "", accountScope: "" };
+
+export function scope() {
+  try {
+    const v = JSON.parse(localStorage.getItem(SCOPE_KEY) || "null");
+    if (v && typeof v === "object") return { ...EMPTY_SCOPE, ...v };
+  } catch { /* storage unavailable */ }
+  return { ...EMPTY_SCOPE, ...(window.__tfsoScope || {}) };
+}
+
+/** Only the non-empty scope keys, ready to merge into an API query. */
+export function scopeQuery() {
+  const s = scope();
+  const q = {};
+  for (const k of ["region", "site", "accountScope"]) if (s[k]) q[k] = s[k];
+  return q;
+}
+
+export function setScope(next) {
+  const v = { ...scope(), ...next };
+  if (next && "region" in next && !("site" in next)) v.site = "";
+  window.__tfsoScope = v; // fallback when storage is blocked
+  try { localStorage.setItem(SCOPE_KEY, JSON.stringify(v)); } catch { /* storage unavailable */ }
+  window.dispatchEvent(new CustomEvent("tfso:scope", { detail: v }));
+  return v;
+}
+
+let regionsPromise = null;
+/** Regions with their sites (cached for the session); [] if the endpoint is unavailable. */
+export function regions(force = false) {
+  if (!regionsPromise || force) {
+    regionsPromise = request("exp", "/portal/v1/catalog/regions")
+      .then(r => items(r))
+      .catch(() => { regionsPromise = null; return []; });
+  }
+  return regionsPromise;
+}

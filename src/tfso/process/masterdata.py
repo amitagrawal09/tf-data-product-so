@@ -21,10 +21,11 @@ class MasterDataClient:
             self._client = ServiceClient(self.settings.system_url, self.settings)
         return self._client
 
-    async def _get(self, path: str, params: dict | None = None, *, not_found_ok: bool = True) -> Any:
+    async def _get(self, path: str, params: dict | None = None, *, not_found_ok: bool = True,
+                   ttl: float | None = None) -> Any:
         key = path + "?" + "&".join(f"{k}={v}" for k, v in sorted((params or {}).items()) if v is not None)
         hit = self._cache.get(key)
-        if hit and time.time() - hit[0] < self.ttl:
+        if hit and time.time() - hit[0] < (self.ttl if ttl is None else ttl):
             return hit[1]
         value = await self.client.get_json(path, {k: v for k, v in (params or {}).items() if v is not None},
                                            not_found_ok=not_found_ok)
@@ -73,3 +74,10 @@ class MasterDataClient:
 
     async def partner(self, isa_id: str) -> dict | None:
         return await self._get(f"/v1/masterdata/trading-partners/{isa_id}")
+
+    async def regions(self) -> list[dict]:
+        return (await self._get("/v1/masterdata/regions"))["items"]
+
+    async def inventory(self) -> list[dict]:
+        """On-hand by warehouse and item - never cached for more than a few seconds (sourcing decisions)."""
+        return (await self._get("/v1/masterdata/inventory", ttl=2))["items"]

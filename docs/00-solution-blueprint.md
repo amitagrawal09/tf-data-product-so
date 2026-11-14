@@ -213,3 +213,18 @@ Marketplace requests are fulfilled by the Process API (`/v1/orders?full=true`, `
 
 Errors: RFC 7807 `application/problem+json` `{type,title,status,detail,instance,correlationId,errors[]}`.
 Headers: `x-correlation-id` (echoed/generated), `Idempotency-Key` on POSTs that create orders, `ETag`/`If-Match`.
+
+
+## 9. Regional & national operations (contract 1.1.0)
+
+| Concept | Where | Notes |
+|---|---|---|
+| Regions & sites | System API `GET /v1/masterdata/regions`, `/v1/masterdata/sites`; Experience `GET /portal/v1/catalog/regions` | WEST, SOUTHWEST, CENTRAL, SOUTHEAST, NORTHEAST (illustrative seed) |
+| Inventory by site | System API `GET /v1/masterdata/inventory?warehouse=&region=&itemNumber=` | D365 on-hand per warehouse; consumed by D365 reservation |
+| Demand region | set when DQ-002 resolves the ship-to | regional teams see their exceptions before sourcing |
+| Sourcing | Process API, after ENRICHED (`ORDER_SOURCED` history event) | rules HOME_SITE → ALTERNATE_SITE_IN_REGION → CROSS_REGION, else BEST_AVAILABLE |
+| CDM | `SalesOrder.fulfillment` {regionId, regionName, customerRegionId, siteId, warehouse, siteName, accountScope, crossRegion, sourcing{rule, reason, decidedAt, candidates[]}} | additive → contract **1.1.0** |
+| Scope filters | `region`, `site`, `accountScope` on `/v1/orders`, `/v1/exceptions`, `/v1/status/summary`, `/v1/metrics/kpis`, `/v1/orders/at-risk`, `/v1/order-events`, and marketplace order datasets | National = no filter |
+| Service KPIs | `/v1/metrics/kpis`: perfectOrderRate, otifRate, onTimeDeliveryRate, inFullRate, fillRate, revenue, avgOrderValue, ordersAtRisk, valueAtRisk, crossRegionSourcingRate, byRegion[], bySite[], byAccountScope[] | |
+| Orders at risk | `GET /v1/orders/at-risk` | ACTION_REQUIRED, LATE_PROMISE, SHIP_DATE_MISSED, DELIVERY_OVERDUE, BACKORDER, ACK_855_LATE |
+| Lakehouse | `gold_order_latest`, `gold_regional_performance` (grouping sets: site, region, account scope, national) | |
