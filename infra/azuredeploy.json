@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.49.2.45890",
-      "templateHash": "3308466001703226642"
+      "templateHash": "4514213180662588365"
     }
   },
   "parameters": {
@@ -131,7 +131,21 @@
       "data-product": "sales-order",
       "environment": "[parameters('environment')]",
       "managed-by": "oneclick"
-    }
+    },
+    "providerNamespaces": [
+      "Microsoft.App",
+      "Microsoft.ApiManagement",
+      "Microsoft.ContainerRegistry",
+      "Microsoft.ServiceBus",
+      "Microsoft.EventHub",
+      "Microsoft.DBforPostgreSQL",
+      "Microsoft.KeyVault",
+      "Microsoft.CognitiveServices",
+      "Microsoft.OperationalInsights",
+      "Microsoft.Insights",
+      "Microsoft.Storage",
+      "Microsoft.ManagedIdentity"
+    ]
   },
   "resources": [
     {
@@ -140,6 +154,134 @@
       "name": "[variables('rgName')]",
       "location": "[parameters('location')]",
       "tags": "[variables('tags')]"
+    },
+    {
+      "type": "Microsoft.Authorization/roleDefinitions",
+      "apiVersion": "2022-04-01",
+      "name": "[guid(subscription().id, 'tfso-resource-provider-registrar')]",
+      "properties": {
+        "roleName": "[format('TFSO resource provider registrar ({0})', subscription().subscriptionId)]",
+        "description": "Register Azure resource providers. Used by the Sales Order data product one-click deployment.",
+        "type": "CustomRole",
+        "permissions": [
+          {
+            "actions": "[concat(map(variables('providerNamespaces'), lambda('ns', format('{0}/register/action', lambdaVariables('ns')))), createArray('Microsoft.Resources/subscriptions/read', 'Microsoft.Resources/subscriptions/providers/read'))]",
+            "notActions": []
+          }
+        ],
+        "assignableScopes": [
+          "[subscription().id]"
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "name": "[guid(subscription().id, variables('rgName'), 'tfso-resource-provider-registrar')]",
+      "properties": {
+        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', guid(subscription().id, 'tfso-resource-provider-registrar'))]",
+        "principalId": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('rgName')), 'Microsoft.Resources/deployments', format('tfso-oneclick-identity-{0}', parameters('environment'))), '2025-04-01').outputs.principalId.value]",
+        "principalType": "ServicePrincipal",
+        "description": "One-click deployer may register resource providers"
+      },
+      "dependsOn": [
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('rgName')), 'Microsoft.Resources/deployments', format('tfso-oneclick-identity-{0}', parameters('environment')))]",
+        "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', guid(subscription().id, 'tfso-resource-provider-registrar'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[format('tfso-oneclick-identity-{0}', parameters('environment'))]",
+      "resourceGroup": "[variables('rgName')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "prefix": {
+            "value": "[parameters('prefix')]"
+          },
+          "environment": {
+            "value": "[parameters('environment')]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "tags": {
+            "value": "[variables('tags')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.49.2.45890",
+              "templateHash": "2109532202164702662"
+            }
+          },
+          "parameters": {
+            "prefix": {
+              "type": "string"
+            },
+            "environment": {
+              "type": "string"
+            },
+            "location": {
+              "type": "string"
+            },
+            "tags": {
+              "type": "object"
+            }
+          },
+          "variables": {
+            "ownerRoleId": "8e3af657-a8ff-443c-a75c-2fe8c4bcb635"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.ManagedIdentity/userAssignedIdentities",
+              "apiVersion": "2023-01-31",
+              "name": "[format('id-{0}-{1}-deployer', parameters('prefix'), parameters('environment'))]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]"
+            },
+            {
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "name": "[guid(resourceGroup().id, resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-{0}-{1}-deployer', parameters('prefix'), parameters('environment'))), variables('ownerRoleId'))]",
+              "properties": {
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('ownerRoleId'))]",
+                "principalId": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-{0}-{1}-deployer', parameters('prefix'), parameters('environment'))), '2023-01-31').principalId]",
+                "principalType": "ServicePrincipal",
+                "description": "One-click deployer for the Sales Order data product (resource-group scope)"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-{0}-{1}-deployer', parameters('prefix'), parameters('environment')))]"
+              ]
+            }
+          ],
+          "outputs": {
+            "id": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-{0}-{1}-deployer', parameters('prefix'), parameters('environment')))]"
+            },
+            "principalId": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-{0}-{1}-deployer', parameters('prefix'), parameters('environment'))), '2023-01-31').principalId]"
+            },
+            "ownerAssignmentId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Authorization/roleAssignments', guid(resourceGroup().id, resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-{0}-{1}-deployer', parameters('prefix'), parameters('environment'))), variables('ownerRoleId')))]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', variables('rgName'))]"
+      ]
     },
     {
       "type": "Microsoft.Resources/deployments",
@@ -152,6 +294,18 @@
         },
         "mode": "Incremental",
         "parameters": {
+          "deployerIdentityId": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('rgName')), 'Microsoft.Resources/deployments', format('tfso-oneclick-identity-{0}', parameters('environment'))), '2025-04-01').outputs.id.value]"
+          },
+          "deployerPrincipalId": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('rgName')), 'Microsoft.Resources/deployments', format('tfso-oneclick-identity-{0}', parameters('environment'))), '2025-04-01').outputs.principalId.value]"
+          },
+          "prerequisiteAssignmentIds": {
+            "value": [
+              "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('rgName')), 'Microsoft.Resources/deployments', format('tfso-oneclick-identity-{0}', parameters('environment'))), '2025-04-01').outputs.ownerAssignmentId.value]",
+              "[subscriptionResourceId('Microsoft.Authorization/roleAssignments', guid(subscription().id, variables('rgName'), 'tfso-resource-provider-registrar'))]"
+            ]
+          },
           "prefix": {
             "value": "[parameters('prefix')]"
           },
@@ -211,7 +365,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.49.2.45890",
-              "templateHash": "13276958209282867700"
+              "templateHash": "9702689551089646433"
             }
           },
           "parameters": {
@@ -265,36 +419,83 @@
             },
             "forceUpdateTag": {
               "type": "string"
+            },
+            "deployerIdentityId": {
+              "type": "string",
+              "metadata": {
+                "description": "Resource id of the deployer managed identity (oneclick/identity.bicep)"
+              }
+            },
+            "deployerPrincipalId": {
+              "type": "string"
+            },
+            "prerequisiteAssignmentIds": {
+              "type": "array",
+              "metadata": {
+                "description": "Role assignments that must exist before the script runs (implicit dependency)"
+              }
             }
           },
           "variables": {
             "$fxv#0": "#!/bin/bash\n# Runs inside the Azure deployment-script container (Azure CLI image), signed in as the deployer\n# managed identity. Downloads the repository and runs ./deploy.sh azure.\nset -euo pipefail\n\nlog() { printf '[oneclick %s] %s\\n' \"$(date -u +%H:%M:%S)\" \"$*\"; }\n\n: \"${REPO_URL:?}\" \"${REPO_REF:?}\" \"${RG:?}\" \"${ENVIRONMENT:?}\"\n\n# ---------------------------------------------------------------- tools\n# The Azure CLI deployment-script image is minimal (no curl/tar/jq in recent versions). Everything this script\n# needs is done with python3 (always present: the Azure CLI runs on it); curl is installed best-effort for deploy.sh.\nPY=\"$(command -v python3 || command -v python || true)\"\n[[ -n \"$PY\" ]] || { echo \"ONE-CLICK DEPLOYMENT FAILED: python3 not found in the Azure CLI container\" >&2; exit 1; }\nif ! command -v curl >/dev/null 2>&1; then\n  if tdnf install -y curl >/dev/null 2>&1 || apk add --no-cache curl >/dev/null 2>&1 \\\n     || { apt-get update -qq && apt-get install -y -qq curl; } >/dev/null 2>&1; then\n    log \"installed curl\"\n  else\n    log \"curl unavailable - deploy.sh uses its python fallback\"\n  fi\nfi\n\n# ---------------------------------------------------------------- source code\nowner_repo=\"${REPO_URL#https://github.com/}\"\nowner_repo=\"${owner_repo%.git}\"\nowner_repo=\"${owner_repo%/}\"\nwork=\"$(mktemp -d)\"\nlog \"Downloading ${owner_repo}@${REPO_REF}\"\nif ! \"$PY\" - \"$owner_repo\" \"$REPO_REF\" \"$work/src\" <<'PYEOF'\nimport io, os, sys, tarfile, time, urllib.request\nrepo, ref, dest = sys.argv[1:4]\nurl = f\"https://api.github.com/repos/{repo}/tarball/{ref}\"\nheaders = {\"Accept\": \"application/vnd.github+json\", \"User-Agent\": \"tfso-oneclick\"}\nif os.environ.get(\"REPO_TOKEN\"):\n    headers[\"Authorization\"] = \"Bearer \" + os.environ[\"REPO_TOKEN\"]\ndata = None\nfor attempt in range(5):\n    try:\n        with urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=120) as r:\n            data = r.read()\n        break\n    except Exception as exc:  # noqa: BLE001\n        print(f\"download attempt {attempt + 1} failed: {exc}\", file=sys.stderr)\n        time.sleep(5)\nif data is None:\n    sys.exit(1)\nos.makedirs(dest, exist_ok=True)\nwith tarfile.open(fileobj=io.BytesIO(data), mode=\"r:gz\") as tf:\n    members = []\n    for m in tf.getmembers():\n        parts = m.name.split(\"/\", 1)\n        if len(parts) < 2 or not parts[1]:\n            continue\n        m.name = parts[1]                       # strip the top-level \"<owner>-<repo>-<sha>/\" folder\n        if m.name.startswith(\"/\") or \"..\" in m.name.split(\"/\"):\n            continue\n        members.append(m)\n    try:\n        tf.extractall(dest, members=members, filter=\"data\")   # Python ≥ 3.12: safe extraction\n    except TypeError:\n        tf.extractall(dest, members=members)\nprint(f\"extracted {len(members)} entries\")\nPYEOF\nthen\n  echo \"ONE-CLICK DEPLOYMENT FAILED: could not download ${owner_repo}@${REPO_REF}. For a private repository supply gitHubToken (read access to contents).\" >&2\n  exit 1\nfi\ncd \"$work/src\"\nchmod +x deploy.sh\nlog \"Source ready\"\n\n# ---------------------------------------------------------------- wait for the Owner role assignment\nfor i in $(seq 1 30); do\n  rg_id=\"$(az group show -n \"$RG\" --query id -o tsv 2>/dev/null || true)\"\n  if [[ -n \"$rg_id\" ]] && az role assignment list --scope \"$rg_id\" \\\n       --query \"[?principalId=='${DEPLOYER_PRINCIPAL_ID}' && roleDefinitionName=='Owner'] | length(@)\" -o tsv 2>/dev/null \\\n       | grep -q '^[1-9]'; then\n    log \"deployer role assignment visible\"\n    break\n  fi\n  log \"waiting for the deployer role assignment to propagate ($i/30)\"\n  sleep 10\ndone\nsleep 30  # authorization caches\n\n# ---------------------------------------------------------------- python for smoke test / demo data\nif [[ \"${SKIP_SMOKE:-false}\" != \"true\" || \"${LOAD_DEMO_DATA:-false}\" == \"true\" ]]; then\n  if ! python3 -m venv \"$work/venv-probe\" >/dev/null 2>&1; then\n    log \"python3 venv not available in this container - platform will deploy, smoke test and demo data are skipped\"\n    export SKIP_SMOKE=true LOAD_DEMO_DATA=false\n  fi\nfi\n\n# ---------------------------------------------------------------- deploy\nexport ASSUME_YES=true PYTHON=\"${PYTHON:-python3}\"\nlog \"Running ./deploy.sh azure (environment=${ENVIRONMENT}, rg=${RG}, apim=${APIM_SKU:-Developer})\"\nset +e\n./deploy.sh azure 2>&1 | tee \"$work/deploy.log\"\nstatus=${PIPESTATUS[0]}\nset -e\nif [[ $status -ne 0 ]]; then\n  # stderr becomes the deployment script's error message in the portal - put the cause there.\n  {\n    echo \"ONE-CLICK DEPLOYMENT FAILED (deploy.sh exit ${status}). Last lines of the deployment log:\"\n    sed 's/\\x1b\\[[0-9;]*m//g' \"$work/deploy.log\" | grep -v '^\\s*$' | tail -25\n    echo \"Full log: resource group ${RG} > ds-${PREFIX:-tfso}-${ENVIRONMENT}-deploy (Show hidden types) > Logs\"\n  } >&2\n  exit \"$status\"\nfi\n\n# ---------------------------------------------------------------- outputs for the template\naz deployment group show -g \"$RG\" -n \"tfso-${ENVIRONMENT}\" --query properties.outputs -o json >\"$work/outputs.json\"\n\"$PY\" - \"$work/outputs.json\" \"$RG\" \"$AZ_SCRIPTS_OUTPUT_PATH\" <<'PYEOF'\nimport json, sys\nouts = json.load(open(sys.argv[1]))\nval = lambda k: (outs.get(k) or {}).get(\"value\") or \"\"\nresult = {\"consoleUrl\": val(\"staticWebsiteUrl\"), \"apiGatewayUrl\": val(\"apimGatewayUrl\").rstrip(\"/\"), \"resourceGroup\": sys.argv[2]}\njson.dump(result, open(sys.argv[3], \"w\"))\nprint(f\"Done. Console: {result['consoleUrl']}  API gateway: {result['apiGatewayUrl']}\")\nPYEOF\n",
-            "ownerRoleId": "8e3af657-a8ff-443c-a75c-2fe8c4bcb635",
+            "baseEnv": [
+              {
+                "name": "PREFIX",
+                "value": "[parameters('prefix')]"
+              },
+              {
+                "name": "ENVIRONMENT",
+                "value": "[parameters('environment')]"
+              },
+              {
+                "name": "LOCATION",
+                "value": "[parameters('location')]"
+              },
+              {
+                "name": "RG",
+                "value": "[resourceGroup().name]"
+              },
+              {
+                "name": "APIM_PUBLISHER_EMAIL",
+                "value": "[parameters('apimPublisherEmail')]"
+              },
+              {
+                "name": "APIM_SKU",
+                "value": "[parameters('apimSku')]"
+              },
+              {
+                "name": "REPO_URL",
+                "value": "[parameters('repositoryUrl')]"
+              },
+              {
+                "name": "REPO_REF",
+                "value": "[parameters('repositoryRef')]"
+              },
+              {
+                "name": "LOAD_DEMO_DATA",
+                "value": "[if(parameters('loadDemoData'), 'true', 'false')]"
+              },
+              {
+                "name": "SKIP_SMOKE",
+                "value": "[if(parameters('runSmokeTest'), 'false', 'true')]"
+              },
+              {
+                "name": "D365_COMPANY",
+                "value": "[parameters('d365Company')]"
+              },
+              {
+                "name": "DEPLOYER_PRINCIPAL_ID",
+                "value": "[parameters('deployerPrincipalId')]"
+              },
+              {
+                "name": "PREREQUISITES",
+                "value": "[join(parameters('prerequisiteAssignmentIds'), ',')]"
+              }
+            ],
             "tokenEnv": "[if(empty(parameters('gitHubToken')), createArray(), createArray(createObject('name', 'REPO_TOKEN', 'secureValue', parameters('gitHubToken'))))]",
             "d365Env": "[if(empty(parameters('d365Url')), createArray(), createArray(createObject('name', 'D365_URL', 'value', parameters('d365Url')), createObject('name', 'D365_TENANT_ID', 'value', parameters('d365TenantId')), createObject('name', 'D365_CLIENT_ID', 'value', parameters('d365ClientId')), createObject('name', 'D365_CLIENT_SECRET', 'secureValue', parameters('d365ClientSecret'))))]"
           },
           "resources": [
-            {
-              "type": "Microsoft.ManagedIdentity/userAssignedIdentities",
-              "apiVersion": "2023-01-31",
-              "name": "[format('id-{0}-{1}-deployer', parameters('prefix'), parameters('environment'))]",
-              "location": "[parameters('location')]",
-              "tags": "[parameters('tags')]"
-            },
-            {
-              "type": "Microsoft.Authorization/roleAssignments",
-              "apiVersion": "2022-04-01",
-              "name": "[guid(resourceGroup().id, resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-{0}-{1}-deployer', parameters('prefix'), parameters('environment'))), variables('ownerRoleId'))]",
-              "properties": {
-                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('ownerRoleId'))]",
-                "principalId": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-{0}-{1}-deployer', parameters('prefix'), parameters('environment'))), '2023-01-31').principalId]",
-                "principalType": "ServicePrincipal",
-                "description": "One-click deployer for the Sales Order data product (resource-group scope)"
-              },
-              "dependsOn": [
-                "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-{0}-{1}-deployer', parameters('prefix'), parameters('environment')))]"
-              ]
-            },
             {
               "type": "Microsoft.Resources/deploymentScripts",
               "apiVersion": "2023-08-01",
@@ -305,7 +506,7 @@
               "identity": {
                 "type": "UserAssigned",
                 "userAssignedIdentities": {
-                  "[format('{0}', resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-{0}-{1}-deployer', parameters('prefix'), parameters('environment'))))]": {}
+                  "[format('{0}', parameters('deployerIdentityId'))]": {}
                 }
               },
               "properties": {
@@ -314,13 +515,9 @@
                 "retentionInterval": "P1D",
                 "cleanupPreference": "OnSuccess",
                 "forceUpdateTag": "[parameters('forceUpdateTag')]",
-                "environmentVariables": "[concat(createArray(createObject('name', 'PREFIX', 'value', parameters('prefix')), createObject('name', 'ENVIRONMENT', 'value', parameters('environment')), createObject('name', 'LOCATION', 'value', parameters('location')), createObject('name', 'RG', 'value', resourceGroup().name), createObject('name', 'APIM_PUBLISHER_EMAIL', 'value', parameters('apimPublisherEmail')), createObject('name', 'APIM_SKU', 'value', parameters('apimSku')), createObject('name', 'REPO_URL', 'value', parameters('repositoryUrl')), createObject('name', 'REPO_REF', 'value', parameters('repositoryRef')), createObject('name', 'LOAD_DEMO_DATA', 'value', if(parameters('loadDemoData'), 'true', 'false')), createObject('name', 'SKIP_SMOKE', 'value', if(parameters('runSmokeTest'), 'false', 'true')), createObject('name', 'D365_COMPANY', 'value', parameters('d365Company')), createObject('name', 'DEPLOYER_PRINCIPAL_ID', 'value', reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-{0}-{1}-deployer', parameters('prefix'), parameters('environment'))), '2023-01-31').principalId)), variables('tokenEnv'), variables('d365Env'))]",
+                "environmentVariables": "[concat(variables('baseEnv'), variables('tokenEnv'), variables('d365Env'))]",
                 "scriptContent": "[variables('$fxv#0')]"
-              },
-              "dependsOn": [
-                "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-{0}-{1}-deployer', parameters('prefix'), parameters('environment')))]",
-                "[resourceId('Microsoft.Authorization/roleAssignments', guid(resourceGroup().id, resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-{0}-{1}-deployer', parameters('prefix'), parameters('environment'))), variables('ownerRoleId')))]"
-              ]
+              }
             }
           ],
           "outputs": {
@@ -336,6 +533,8 @@
         }
       },
       "dependsOn": [
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('rgName')), 'Microsoft.Resources/deployments', format('tfso-oneclick-identity-{0}', parameters('environment')))]",
+        "[subscriptionResourceId('Microsoft.Authorization/roleAssignments', guid(subscription().id, variables('rgName'), 'tfso-resource-provider-registrar'))]",
         "[subscriptionResourceId('Microsoft.Resources/resourceGroups', variables('rgName'))]"
       ]
     }
