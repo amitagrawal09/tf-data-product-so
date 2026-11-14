@@ -18,8 +18,21 @@ This repository implements the Sales Order data product described in the *Taylor
 | 4 | Azure reference architecture | [`docs/04-azure-reference-architecture.md`](docs/04-azure-reference-architecture.md), IaC in [`infra/`](infra/), Databricks in [`databricks/`](databricks/) |
 | 5 | Single end-to-end deploy script | [`deploy.sh`](deploy.sh) (`local`, `docker`, `azure`, `test`, `destroy`) |
 | 6 | Front end for testing order processing | [`frontend/`](frontend/) (Order Operations Console) |
+| – | One-click Azure deployment guide | [`docs/06-azure-one-click-deployment.md`](docs/06-azure-one-click-deployment.md), [`infra/oneclick.bicep`](infra/oneclick.bicep), [`.github/workflows/deploy-azure.yml`](.github/workflows/deploy-azure.yml) |
 | – | Product strategy (CPO view): north star, regional operating model, roadmap | [`docs/05-product-strategy.md`](docs/05-product-strategy.md) |
 | – | Binding solution blueprint (contracts, routes, env vars) | [`docs/00-solution-blueprint.md`](docs/00-solution-blueprint.md) |
+
+## Deploy to Azure (one click)
+
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Famitagrawal09%2Ftf-data-product-so%2Fclaude%2Fdreamy-shannon-1j1v3d%2Finfra%2Fazuredeploy.json)
+
+Each option deploys the platform, the image, the apps, API Management and the console, then optionally runs the smoke test and loads demo data:
+
+- **GitHub Actions:** run `scripts/azure-github-setup.sh` once in Azure Cloud Shell, then go to **Actions → Deploy to Azure → Run workflow**. This is the recommended option: it uses OIDC with no stored secrets, and test and prod can require approvals.
+- **Azure portal:** publish once with `scripts/publish-template-spec.sh`, then go to **Template specs → tfso-sales-order → Deploy**. This also works for private repositories.
+- **The button above:** needs a public repository and the generated `infra/azuredeploy.json`.
+
+See [`docs/06-azure-one-click-deployment.md`](docs/06-azure-one-click-deployment.md) for prerequisites, timings, costs and troubleshooting.
 
 ## Quick start (local, about 1 minute)
 

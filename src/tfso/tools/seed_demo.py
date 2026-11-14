@@ -60,7 +60,7 @@ def main() -> int:
     ap.add_argument("--api-key", default="local-dev-key")
     ap.add_argument("--subscription-key")
     a = ap.parse_args()
-    h = {"x-api-key": a.api_key}
+    h = {"x-api-key": a.api_key} if a.api_key else {}
     if a.subscription_key:
         h["Ocp-Apim-Subscription-Key"] = a.subscription_key
     c = httpx.Client(base_url=a.base.rstrip("/"), headers=h, timeout=60)

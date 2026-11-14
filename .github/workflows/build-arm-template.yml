@@ -1,0 +1,37 @@
+# Validates the Bicep and publishes the compiled one-click ARM template (infra/azuredeploy.json) that the
+# "Deploy to Azure" portal button uses. Runs on changes to infra/ and on demand.
+name: Build one-click ARM template
+
+on:
+  push:
+    paths: ["infra/**", ".github/workflows/build-arm-template.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Bicep
+        run: az bicep install && az bicep version
+      - name: Lint and build the platform template
+        run: az bicep build --file infra/main.bicep --stdout > /dev/null
+      - name: Build the one-click template
+        run: az bicep build --file infra/oneclick.bicep --outfile infra/azuredeploy.json
+      - name: Commit azuredeploy.json if it changed
+        run: |
+          if git diff --quiet -- infra/azuredeploy.json && git ls-files --error-unmatch infra/azuredeploy.json >/dev/null 2>&1; then
+            echo "azuredeploy.json unchanged"; exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add infra/azuredeploy.json
+          git commit -m "Build one-click ARM template (infra/azuredeploy.json)"
+          git push
+      - uses: actions/upload-artifact@v4
+        with:
+          name: azuredeploy
+          path: infra/azuredeploy.json

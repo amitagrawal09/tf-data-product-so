@@ -1,0 +1,105 @@
+# One-click deployment of the Sales Order data product to Azure.
+# GitHub → Actions → "Deploy to Azure" → Run workflow → pick the environment → Run.
+#
+# One-time setup (Azure Cloud Shell): ./scripts/azure-github-setup.sh <owner>/<repo>
+# It creates an Entra ID app with GitHub OIDC federation (no secrets stored) and sets:
+#   secrets   AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID
+#   variables APIM_PUBLISHER_EMAIL, AZURE_LOCATION (optional), TFSO_PREFIX (optional)
+name: Deploy to Azure
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Environment
+        type: choice
+        options: [dev, test, prod]
+        default: dev
+      location:
+        description: Azure region (blank = repository variable AZURE_LOCATION or eastus2)
+        type: string
+        default: ""
+      apimSku:
+        description: API Management SKU (Developer takes 30-45 min the first time)
+        type: choice
+        options: [Developer, Consumption, BasicV2, StandardV2, Premium]
+        default: Developer
+      loadDemoData:
+        description: Load demo orders across all regions (non-prod only)
+        type: boolean
+        default: true
+      runSmokeTest:
+        description: Run the end-to-end smoke test through API Management
+        type: boolean
+        default: true
+
+permissions:
+  id-token: write   # OIDC token for azure/login
+  contents: read
+
+concurrency:
+  group: deploy-azure-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  test:
+    name: Test suite
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt && pip install -e .
+      - run: python -m pytest -q -p no:logging
+
+  deploy:
+    name: Deploy ${{ inputs.environment }}
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    # GitHub environments let you require approvals for test/prod (Settings → Environments).
+    environment: ${{ inputs.environment }}
+    env:
+      ENVIRONMENT: ${{ inputs.environment }}
+      LOCATION: ${{ inputs.location || vars.AZURE_LOCATION || 'eastus2' }}
+      PREFIX: ${{ vars.TFSO_PREFIX || 'tfso' }}
+      APIM_SKU: ${{ inputs.apimSku }}
+      APIM_PUBLISHER_EMAIL: ${{ vars.APIM_PUBLISHER_EMAIL }}
+      LOAD_DEMO_DATA: ${{ inputs.loadDemoData && inputs.environment != 'prod' }}
+      SKIP_SMOKE: ${{ !inputs.runSmokeTest }}
+      ASSUME_YES: "true"
+      # Optional: keep secrets stable across runs (otherwise they are rotated on each deployment)
+      POSTGRES_ADMIN_PASSWORD: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}
+      TFSO_BACKEND_API_KEY: ${{ secrets.TFSO_BACKEND_API_KEY }}
+      # Optional: live Dynamics 365 instead of the simulator
+      D365_URL: ${{ vars.D365_URL }}
+      D365_TENANT_ID: ${{ vars.D365_TENANT_ID }}
+      D365_CLIENT_ID: ${{ vars.D365_CLIENT_ID }}
+      D365_CLIENT_SECRET: ${{ secrets.D365_CLIENT_SECRET }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Check configuration
+        run: |
+          missing=""
+          [ -n "${{ secrets.AZURE_CLIENT_ID }}" ] || missing="$missing AZURE_CLIENT_ID"
+          [ -n "${{ secrets.AZURE_TENANT_ID }}" ] || missing="$missing AZURE_TENANT_ID"
+          [ -n "${{ secrets.AZURE_SUBSCRIPTION_ID }}" ] || missing="$missing AZURE_SUBSCRIPTION_ID"
+          [ -n "$APIM_PUBLISHER_EMAIL" ] || missing="$missing APIM_PUBLISHER_EMAIL(variable)"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing:$missing. Run scripts/azure-github-setup.sh once (see README → Deploy to Azure)."
+            exit 1
+          fi
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: Deploy (platform → image → apps → console → smoke test)
+        run: ./deploy.sh azure
