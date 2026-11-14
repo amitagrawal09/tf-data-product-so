@@ -217,7 +217,7 @@ module apim 'modules/apim.bicep' = {
     experienceFqdn: containerApps.outputs.experienceFqdn
     processFqdn: containerApps.outputs.processFqdn
     systemFqdn: containerApps.outputs.systemFqdn
-    consoleOrigin: endsWith(storage.outputs.webEndpoint, '/') ? substring(storage.outputs.webEndpoint, 0, length(storage.outputs.webEndpoint) - 1) : storage.outputs.webEndpoint
+    consoleOrigin: endsWith(storage.outputs.webEndpoint, '/') ? take(storage.outputs.webEndpoint, max(length(storage.outputs.webEndpoint) - 1, 0)) : storage.outputs.webEndpoint
     exposeSystemApi: exposeSystemApi
     appInsightsId: monitoring.outputs.appInsightsId
     appInsightsInstrumentationKey: monitoring.outputs.appInsightsInstrumentationKey
