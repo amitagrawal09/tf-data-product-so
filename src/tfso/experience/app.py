@@ -20,6 +20,7 @@ from ..common.config import Settings, get_settings
 from ..common.util import group_id as new_group_id, iso, utcnow
 from ..common.web import ApiError, ServiceClient, create_app
 from .extract import extract_email
+from .marketplace import build_router
 
 BEG_TO_PURPOSE = x12.BEG_PURPOSE
 
@@ -75,6 +76,7 @@ def create_experience_app(settings: Settings | None = None) -> FastAPI:
                      "Each channel has its own experience API over the shared Order Intake and Order Status process APIs.")
     process = ServiceClient(settings.process_url, settings)
     system = ServiceClient(settings.system_url, settings)
+    app.include_router(build_router(process, system))
 
     def principal_customer(request: Request) -> str | None:
         return (getattr(request.state, "principal", {}) or {}).get("extension_customerId")

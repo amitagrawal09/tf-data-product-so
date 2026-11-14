@@ -8,13 +8,13 @@ import json
 import logging
 import secrets
 from contextlib import asynccontextmanager
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Any, Literal
 
 import httpx
 from fastapi import Body, FastAPI, Header, Query, Request, Response
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from ..common.bus import EventStream, make_broker
 from ..common.config import Settings, get_settings
@@ -25,7 +25,8 @@ from ..common.util import iso, parse_dt, utcnow
 from ..common.web import ApiError, create_app
 from . import views
 from .masterdata import MasterDataClient
-from .models import InboxMessage, OutboxMessage, ProcessBase, SubscriptionRow
+from .models import (DataAccessRequestRow, DataExportRow, InboxMessage, OutboxMessage, ProcessBase,
+                     SubscriptionRow)
 from .service import OrderService
 
 log = logging.getLogger("tfso.process")
@@ -36,6 +37,7 @@ TAGS = [
     {"name": "customer service", "description": "Exception handling, corrections, holds and cancellation"},
     {"name": "events", "description": "Status events from D365, WMS and TMS"},
     {"name": "webhooks", "description": "Push status notifications to subscribers"},
+    {"name": "governance", "description": "Data marketplace backing store: access requests, export audit, usage"},
 ]
 
 
@@ -69,6 +71,33 @@ class ActionRequest(BaseModel):
     reason: str | None = None
     reasonCode: str | None = None
     comment: str | None = None
+
+
+class AccessRequest(BaseModel):
+    datasetId: str
+    requester: str
+    team: str | None = None
+    purpose: str = Field(min_length=3)
+    consumerSystem: str | None = None
+    accessLevel: Literal["READ", "EXPORT", "SUBSCRIBE"] = "READ"
+    autoApprove: bool = False
+
+
+class AccessDecision(BaseModel):
+    decision: Literal["APPROVED", "REJECTED", "REVOKED"]
+    decidedBy: str
+    note: str | None = None
+
+
+class ExportAudit(BaseModel):
+    datasetId: str
+    requester: str
+    format: str
+    filters: dict[str, Any] = Field(default_factory=dict)
+    fields: list[str] = Field(default_factory=list)
+    rowCount: int = 0
+    bytes: int = 0
+    fulfilledBy: list[str] = Field(default_factory=list)
 
 
 class SubscriptionRequest(BaseModel):
@@ -192,11 +221,110 @@ def create_process_app(settings: Settings | None = None) -> FastAPI:
                      channel: str | None = None, customerPo: str | None = None, erpSalesOrderId: str | None = None,
                      fromDate: date | None = None, toDate: date | None = None, hasExceptions: bool | None = None,
                      q: str | None = None, page: int = Query(1, ge=1), pageSize: int = Query(25, ge=1, le=200),
-                     sort: str = "-receivedAt"):
+                     sort: str = "-receivedAt",
+                     full: bool = Query(False, description="Include the canonical order document in each item")):
         return views.search_orders(db, status=status, status_category=statusCategory, customer_id=customerId,
                                    channel=channel, customer_po=customerPo, erp_sales_order_id=erpSalesOrderId,
                                    from_date=fromDate, to_date=toDate, has_exceptions=hasExceptions, q=q, page=page,
-                                   page_size=pageSize, sort=sort)
+                                   page_size=pageSize, sort=sort, full=full)
+
+    @app.get("/v1/order-events", tags=["order status"],
+             summary="Lifecycle event feed across all orders (oldest first, paged)")
+    async def order_events(since: datetime | None = None, until: datetime | None = None, eventType: str | None = None,
+                           orderId: str | None = None, sourceSystem: str | None = None,
+                           page: int = Query(1, ge=1), pageSize: int = Query(200, ge=1, le=1000)):
+        return views.event_feed(db, since=since, until=until, event_type=eventType, order_id=orderId,
+                                source_system=sourceSystem, page=page, page_size=pageSize)
+
+    @app.get("/v1/datasets/stats", tags=["governance"], summary="Live volume/freshness facts for the data catalog")
+    async def ds_stats():
+        return views.dataset_stats(db)
+
+    # ------------------------------------------------------------------ data governance (marketplace backing store)
+    def access_view(x: DataAccessRequestRow) -> dict:
+        return {"requestId": x.request_id, "datasetId": x.dataset_id, "requester": x.requester, "team": x.team,
+                "purpose": x.purpose, "consumerSystem": x.consumer_system, "accessLevel": x.access_level,
+                "status": x.status, "requestedAt": iso(x.requested_at), "decidedAt": iso(x.decided_at),
+                "decidedBy": x.decided_by, "decisionNote": x.decision_note, "expiresAt": iso(x.expires_at)}
+
+    @app.post("/v1/governance/access-requests", tags=["governance"], status_code=201)
+    async def create_access(req: AccessRequest):
+        now = utcnow()
+        auto = req.autoApprove
+        x = DataAccessRequestRow(request_id=f"AR-{secrets.token_hex(4).upper()}", dataset_id=req.datasetId,
+                                 requester=req.requester, team=req.team, purpose=req.purpose,
+                                 consumer_system=req.consumerSystem, access_level=req.accessLevel,
+                                 status="APPROVED" if auto else "PENDING", requested_at=now,
+                                 decided_at=now if auto else None, decided_by="policy:auto-approve" if auto else None,
+                                 decision_note="Internal dataset - approved by policy" if auto else None,
+                                 expires_at=now + timedelta(days=365) if auto else None)
+        with db.session() as s:
+            s.add(x)
+            s.flush()
+            return access_view(x)
+
+    @app.get("/v1/governance/access-requests", tags=["governance"])
+    async def list_access(datasetId: str | None = None, requester: str | None = None, status: str | None = None):
+        with db.session() as s:
+            q = select(DataAccessRequestRow)
+            if datasetId:
+                q = q.where(DataAccessRequestRow.dataset_id == datasetId)
+            if requester:
+                q = q.where(DataAccessRequestRow.requester == requester)
+            if status:
+                q = q.where(DataAccessRequestRow.status == status.upper())
+            rows = s.execute(q.order_by(DataAccessRequestRow.requested_at.desc())).scalars().all()
+            return {"items": [access_view(x) for x in rows]}
+
+    @app.post("/v1/governance/access-requests/{request_id}/decision", tags=["governance"])
+    async def decide_access(request_id: str, req: AccessDecision):
+        with db.session() as s:
+            x = s.get(DataAccessRequestRow, request_id)
+            if not x:
+                raise ApiError(404, "Access request not found", request_id)
+            if x.status != "PENDING" and req.decision != "REVOKED":
+                raise ApiError(409, "Already decided", f"Request is {x.status}")
+            x.status, x.decided_by, x.decision_note, x.decided_at = req.decision, req.decidedBy, req.note, utcnow()
+            x.expires_at = utcnow() + timedelta(days=365) if req.decision == "APPROVED" else None
+            s.flush()
+            return access_view(x)
+
+    @app.post("/v1/governance/exports", tags=["governance"], status_code=201)
+    async def record_export(req: ExportAudit):
+        with db.session() as s:
+            x = DataExportRow(export_id=f"EX-{secrets.token_hex(5).upper()}", dataset_id=req.datasetId,
+                              requester=req.requester, format=req.format, filters=req.filters, fields=req.fields,
+                              row_count=req.rowCount, bytes=req.bytes, fulfilled_by=req.fulfilledBy)
+            s.add(x)
+            s.flush()
+            return {"exportId": x.export_id, "createdAt": iso(x.created_at)}
+
+    @app.get("/v1/governance/exports", tags=["governance"])
+    async def list_exports(datasetId: str | None = None, requester: str | None = None, limit: int = Query(50, le=500)):
+        with db.session() as s:
+            q = select(DataExportRow)
+            if datasetId:
+                q = q.where(DataExportRow.dataset_id == datasetId)
+            if requester:
+                q = q.where(DataExportRow.requester == requester)
+            rows = s.execute(q.order_by(DataExportRow.created_at.desc()).limit(limit)).scalars().all()
+            return {"items": [{"exportId": x.export_id, "datasetId": x.dataset_id, "requester": x.requester,
+                               "format": x.format, "filters": x.filters, "fields": x.fields, "rowCount": x.row_count,
+                               "bytes": x.bytes, "fulfilledBy": x.fulfilled_by, "createdAt": iso(x.created_at)}
+                              for x in rows]}
+
+    @app.get("/v1/governance/usage", tags=["governance"], summary="Per-dataset usage: exports, consumers, pending requests")
+    async def usage():
+        with db.session() as s:
+            out: dict[str, dict] = {}
+            for ds, n, last in s.execute(select(DataExportRow.dataset_id, func.count(), func.max(DataExportRow.created_at))
+                                         .group_by(DataExportRow.dataset_id)).all():
+                out.setdefault(ds, {})["exports"] = n
+                out[ds]["lastExportAt"] = iso(last)
+            for ds, status, n in s.execute(select(DataAccessRequestRow.dataset_id, DataAccessRequestRow.status, func.count())
+                                           .group_by(DataAccessRequestRow.dataset_id, DataAccessRequestRow.status)).all():
+                out.setdefault(ds, {})[{"APPROVED": "approvedConsumers", "PENDING": "pendingRequests"}.get(status, status.lower())] = n
+            return {"items": out}
 
     @app.get("/v1/orders/by-po/{customer_po}", tags=["order status"], summary="Find orders by customer PO")
     async def by_po(customer_po: str, customerId: str | None = None):

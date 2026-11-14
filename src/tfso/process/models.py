@@ -111,4 +111,37 @@ class CounterRow(ProcessBase):
     value: Mapped[int] = mapped_column(Integer, default=0)
 
 
+class DataAccessRequestRow(ProcessBase):
+    """Data marketplace: a consumer's request to use a dataset (governance record)."""
+    __tablename__ = "data_access_requests"
+    request_id: Mapped[str] = mapped_column(String(40), primary_key=True)
+    dataset_id: Mapped[str] = mapped_column(String(80), index=True)
+    requester: Mapped[str] = mapped_column(String(200), index=True)
+    team: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    purpose: Mapped[str] = mapped_column(Text)
+    consumer_system: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    access_level: Mapped[str] = mapped_column(String(20), default="READ")
+    status: Mapped[str] = mapped_column(String(20), index=True)
+    requested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    decided_by: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    decision_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class DataExportRow(ProcessBase):
+    """Data marketplace: audit of every data retrieval / export (who, what, how, which APIs fulfilled it)."""
+    __tablename__ = "data_exports"
+    export_id: Mapped[str] = mapped_column(String(40), primary_key=True)
+    dataset_id: Mapped[str] = mapped_column(String(80), index=True)
+    requester: Mapped[str] = mapped_column(String(200), index=True)
+    format: Mapped[str] = mapped_column(String(10))
+    filters: Mapped[dict] = mapped_column(JsonDoc)
+    fields: Mapped[list] = mapped_column(JsonDoc)
+    row_count: Mapped[int] = mapped_column(Integer, default=0)
+    bytes: Mapped[int] = mapped_column(Integer, default=0)
+    fulfilled_by: Mapped[list] = mapped_column(JsonDoc)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+
+
 OutboxMessage, InboxMessage = make_models(ProcessBase)

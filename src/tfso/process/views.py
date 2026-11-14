@@ -169,7 +169,7 @@ def search_orders(db: Database, *, status: str | None = None, status_category: s
                   customer_id: str | None = None, channel: str | None = None, customer_po: str | None = None,
                   erp_sales_order_id: str | None = None, from_date: date | None = None, to_date: date | None = None,
                   has_exceptions: bool | None = None, q: str | None = None, page: int = 1, page_size: int = 25,
-                  sort: str = "-receivedAt") -> dict:
+                  sort: str = "-receivedAt", full: bool = False) -> dict:
     conds = []
     if status:
         conds.append(OrderRow.status.in_([x.strip().upper() for x in status.split(",")]))
@@ -205,7 +205,8 @@ def search_orders(db: Database, *, status: str | None = None, status_category: s
         total = s.scalar(select(func.count()).select_from(OrderRow).where(where))
         rows = s.execute(select(OrderRow).where(where).order_by(order, OrderRow.order_id)
                          .offset((page - 1) * page_size).limit(page_size)).scalars().all()
-        return {"items": [list_item(r) for r in rows], "page": page, "pageSize": page_size, "total": total,
+        items = [{**list_item(r), "order": r.doc} if full else list_item(r) for r in rows]
+        return {"items": items, "page": page, "pageSize": page_size, "total": total,
                 "totalPages": (total + page_size - 1) // page_size}
 
 
@@ -342,3 +343,45 @@ def kpis(db: Database, labor_rate_per_hour: float = 32.0) -> dict:
         "assumptions": {"baselineManualMinutesPerOrder": baseline_minutes, "laborRatePerHourUsd": labor_rate_per_hour},
         "asOf": iso(utcnow()),
     }
+
+
+def event_feed(db: Database, *, since: datetime | None = None, until: datetime | None = None,
+               event_type: str | None = None, order_id: str | None = None, source_system: str | None = None,
+               page: int = 1, page_size: int = 200) -> dict:
+    """Cross-order lifecycle feed (all history entries), oldest first - backs the order-lifecycle dataset."""
+    conds = []
+    if since:
+        conds.append(HistoryRow.recorded_at >= since)
+    if until:
+        conds.append(HistoryRow.recorded_at <= until)
+    if event_type:
+        conds.append(HistoryRow.event_type.in_([x.strip().upper() for x in event_type.split(",")]))
+    if order_id:
+        conds.append(HistoryRow.order_id == order_id)
+    if source_system:
+        conds.append(HistoryRow.source_system == source_system.upper())
+    page, page_size = max(page, 1), max(1, min(page_size, 1000))
+    with db.session() as s:
+        where = and_(*conds) if conds else True
+        total = s.scalar(select(func.count()).select_from(HistoryRow).where(where)) or 0
+        rows = s.execute(select(HistoryRow).where(where).order_by(HistoryRow.recorded_at, HistoryRow.order_id,
+                                                                  HistoryRow.sequence)
+                         .offset((page - 1) * page_size).limit(page_size)).scalars().all()
+        last = s.scalar(select(func.max(HistoryRow.recorded_at)))
+        return {"items": [r.entry for r in rows], "page": page, "pageSize": page_size, "total": total,
+                "totalPages": (total + page_size - 1) // page_size, "lastRecordedAt": iso(_aware(last))}
+
+
+def dataset_stats(db: Database) -> dict:
+    """Live freshness/volume facts the data marketplace shows for the order datasets."""
+    with db.session() as s:
+        return {
+            "orders": s.scalar(select(func.count()).select_from(OrderRow)) or 0,
+            "ordersLastUpdatedAt": iso(_aware(s.scalar(select(func.max(OrderRow.updated_at))))),
+            "historyEvents": s.scalar(select(func.count()).select_from(HistoryRow)) or 0,
+            "historyLastRecordedAt": iso(_aware(s.scalar(select(func.max(HistoryRow.recorded_at))))),
+            "openExceptionOrders": s.scalar(select(func.count()).select_from(OrderRow)
+                                            .where(OrderRow.open_exception_count > 0)) or 0,
+            "documents": s.scalar(select(func.count()).select_from(DocumentRow)) or 0,
+            "asOf": iso(utcnow()),
+        }

@@ -154,6 +154,15 @@ actor{type,id,name}, correlationId, causationId, externalEventId, reasonCode, me
 | GET | `/edi/v1/orders/{orderId}/documents` | inbound/outbound EDI documents |
 | POST | `/email/v1/orders` | email message (JSON with base64 attachments CSV/XLSX/PDF/TXT) → 202 |
 
+| GET | `/marketplace/v1/datasets[?q=&domain=&classification=&type=&tag=]` | Data marketplace catalog with live facts (records, last change, freshness, usage) |
+| GET | `/marketplace/v1/datasets/{id}` · `/schema` · `/lineage` | Dataset card, data definition, lineage graph |
+| GET | `/marketplace/v1/datasets/{id}/preview?limit=&<filters>` | Sample rows (PII/sensitive masked until access approved) + `fulfilledBy` |
+| GET | `/marketplace/v1/datasets/{id}/export?format=csv\|json\|ndjson\|xlsx&fields=&limit=&<filters>` | Retrieve/export; audited; headers `x-tfso-row-count`, `x-tfso-export-id`, `x-tfso-fulfilled-by` |
+| POST | `/marketplace/v1/datasets/{id}/access-requests` · GET `/marketplace/v1/access-requests` · POST `/marketplace/v1/access-requests/{rid}/decision` | Access governance (auto-approve for Internal/Public, owner approval for Confidential) |
+| GET | `/marketplace/v1/exports` · `/marketplace/v1/domains` | Export audit trail, domains |
+
+Marketplace requests are fulfilled by the Process API (`/v1/orders?full=true`, `/v1/order-events`, `/v1/exceptions`, `/v1/metrics/kpis`, `/v1/datasets/stats`, `/v1/governance/*`) and the System API (`/v1/masterdata/*`). Consumer identity is sent in `x-user-id` (in Azure: taken from the Entra ID token by APIM).
+
 `PortalOrderRequest`: `{channel: "PORTAL"|"MANUAL", customerId, shipToId, customerPo, requestedDeliveryDate, orderType?, currency?, notes?, contact{name,email,phone}?, enteredBy?, lines:[{itemNumber, quantity, uom, unitPrice?, notes?}]}`
 `OrderAccepted`: `{orderId, orderGroupId, status, statusCategory, exceptions[], statusUrl, historyUrl, receivedAt, correlationId}`
 
@@ -180,6 +189,10 @@ actor{type,id,name}, correlationId, causationId, externalEventId, reasonCode, me
 | GET | `/v1/status/summary` | counts by status / category / channel |
 | GET | `/v1/metrics/kpis` | touchless rate, first-pass validation, cycle times by channel, freshness |
 | GET | `/v1/reference/statuses` | state machine (statuses, transitions, categories) |
+| GET | `/v1/order-events?since=&until=&eventType=&orderId=&sourceSystem=&page=&pageSize=` | Lifecycle event feed across all orders (backs the Order Lifecycle History dataset) |
+| GET | `/v1/datasets/stats` | Live volume/freshness facts for the data catalog |
+| POST/GET | `/v1/governance/access-requests`, POST `/v1/governance/access-requests/{id}/decision` | Data access governance store |
+| POST/GET | `/v1/governance/exports`, GET `/v1/governance/usage` | Export audit and per-dataset usage |
 | GET/POST/DELETE | `/v1/subscriptions[/{id}]` | status webhooks (HMAC-SHA256 `x-tfso-signature`) |
 | POST | `/v1/bus/{topic}` | local HTTP bus delivery |
 

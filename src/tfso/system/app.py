@@ -171,8 +171,20 @@ def create_system_app(settings: Settings | None = None) -> FastAPI:
     @app.get("/v1/masterdata/ship-tos", tags=["master data"])
     async def find_ship_to(customerId: str | None = None, ediLocationCode: str | None = None,
                            gln: str | None = None, name: str | None = None):
+        if not any((ediLocationCode, gln, name)):  # no lookup key → list (optionally per customer)
+            if customerId:
+                return {"items": await md.ship_tos_for(customerId)}
+            return {"items": list(md.ship_tos.values())}
         st = await md.find_ship_to(customerId, edi_code=ediLocationCode, gln=gln, name=name)
         return {"items": [st] if st else []}
+
+    @app.get("/v1/masterdata/trading-partners", tags=["master data"])
+    async def trading_partners():
+        return {"items": list(md.partners.values())}
+
+    @app.get("/v1/masterdata/inventory", tags=["master data"], summary="Available inventory by item (D365 on-hand)")
+    async def inventory():
+        return {"items": [{"itemNumber": k, "available": v, "warehouse": "WH-SAL"} for k, v in sorted(md.inventory.items())]}
 
     @app.get("/v1/masterdata/items", tags=["master data"])
     async def items(active: bool | None = None):

@@ -80,7 +80,14 @@ Interactive API docs (OpenAPI): http://localhost:8002/docs (Process / Order Stat
 2. **Order detail → Fulfillment simulator.** Release, pick, pack, ship (in full or in part), deliver, invoice. The milestone stepper and the **History** tab update from the real status events.
 3. **New order → EDI X12 850.** Pick "2 – multi-order interchange". You get two orders in one *order group* and the 997. The **Documents** tab later shows the 855, 856 and 810.
 4. **New order → bad price / unknown item.** The order goes to the **Exceptions** queue. Use **Correct & resubmit**, which sends a `PATCH` with `If-Match`, then resubmits.
-5. **Dashboard.** Shows the touchless rate, first-pass validation rate, receipt-to-D365 cycle time by channel, data freshness and ROI estimates.
+5. **Data marketplace.** Browse the 12 governed datasets: Sales Orders, lines, lifecycle history, exceptions, shipments/traceability, invoices, KPIs, customers, ship-tos, items, price agreements and EDI partners. Each dataset page shows:
+   - its data definition, lineage, refresh frequency and freshness SLA, owner/steward and live record count;
+   - a data preview;
+   - export to CSV, JSON, NDJSON or Excel;
+   - access requests, which confidential datasets (customers, invoices, prices) need a data owner to approve, with PII masked until then.
+
+   Every request is fulfilled by the Process and System APIs, and the page shows exactly which calls were made. Every export is audited.
+6. **Dashboard.** Shows the touchless rate, first-pass validation rate, receipt-to-D365 cycle time by channel, data freshness and ROI estimates.
 
 ## Order Status API (Process API) in brief
 

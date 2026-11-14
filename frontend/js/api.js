@@ -167,3 +167,40 @@ export function items(resp) {
   if (!resp || typeof resp !== "object") return [];
   return resp.items || resp.value || resp.data || resp.results || [];
 }
+
+/**
+ * Download a file (export) through the gateway: returns {ok, status, blob, filename, headers, problem}.
+ * Recorded in the API call log like every other request (body shown as a size summary).
+ */
+export async function download(layer, path, opts = {}) {
+  const s = loadSettings();
+  const url = `${s.apiBase}/${layer}${path}`;
+  const headers = { "x-correlation-id": uuid(), Accept: "*/*" };
+  if (s.apiKey) headers["x-api-key"] = s.apiKey;
+  if (s.subscriptionKey) headers["Ocp-Apim-Subscription-Key"] = s.subscriptionKey;
+  Object.assign(headers, opts.headers || {});
+  const call = { id: ++callSeq, at: new Date().toISOString(), layer, source: opts.source || (location.hash || "#/").replace(/^#/, ""),
+                 request: { method: "GET", url, path: `/${layer}${path}`, headers: maskHeaders(headers), body: undefined }, response: null };
+  const t0 = performance.now();
+  let res;
+  try { res = await fetch(url, { headers }); } catch (err) {
+    call.response = { status: 0, ok: false, ms: Math.round(performance.now() - t0), headers: {}, body: { title: "Network error", detail: err.message } };
+    record(call);
+    return { ok: false, status: 0, problem: call.response.body, headers: {} };
+  }
+  const h = {};
+  res.headers.forEach((v, k) => { h[k] = v; });
+  const ms = Math.round(performance.now() - t0);
+  if (!res.ok) {
+    let problem;
+    try { problem = await res.json(); } catch { problem = { title: `HTTP ${res.status}` }; }
+    call.response = { status: res.status, ok: false, ms, headers: h, body: problem };
+    record(call);
+    return { ok: false, status: res.status, problem, headers: h };
+  }
+  const blob = await res.blob();
+  const m = /filename="?([^";]+)"?/i.exec(h["content-disposition"] || "");
+  call.response = { status: res.status, ok: true, ms, headers: h, body: `(${h["content-type"] || "file"} · ${blob.size.toLocaleString()} bytes · ${h["x-tfso-row-count"] || "?"} rows)` };
+  record(call);
+  return { ok: true, status: res.status, blob, filename: m ? m[1] : "export", headers: h };
+}

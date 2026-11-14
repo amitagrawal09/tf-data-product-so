@@ -8,6 +8,7 @@ import * as orderDetail from "./views/orderDetail.js";
 import * as exceptions from "./views/exceptions.js";
 import * as webhooks from "./views/webhooks.js";
 import * as explorer from "./views/explorer.js";
+import * as marketplace from "./views/marketplace.js";
 import * as settings from "./views/settings.js";
 
 const routes = [
@@ -17,6 +18,8 @@ const routes = [
   { re: /^#\/orders(?:\?(.*))?$/, nav: "orders", view: orders, title: "Orders" },
   { re: /^#\/exceptions$/, nav: "exceptions", view: exceptions, title: "Exceptions" },
   { re: /^#\/webhooks$/, nav: "webhooks", view: webhooks, title: "Webhooks" },
+  { re: /^#\/marketplace\/([^/?]+)(?:\/(\w+))?$/, nav: "marketplace", view: marketplace, title: "Dataset" },
+  { re: /^#\/marketplace$/, nav: "marketplace", view: marketplace, title: "Data marketplace" },
   { re: /^#\/explorer$/, nav: "explorer", view: explorer, title: "API explorer" },
   { re: /^#\/settings$/, nav: "settings", view: settings, title: "Settings" },
 ];
