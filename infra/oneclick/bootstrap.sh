@@ -56,7 +56,10 @@ with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as tf:
         if m.name.startswith("/") or ".." in m.name.split("/"):
             continue
         members.append(m)
-    tf.extractall(dest, members=members)
+    try:
+        tf.extractall(dest, members=members, filter="data")   # Python ≥ 3.12: safe extraction
+    except TypeError:
+        tf.extractall(dest, members=members)
 print(f"extracted {len(members)} entries")
 PYEOF
 then
