@@ -1,0 +1,361 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.49.2.45890",
+      "templateHash": "16722147816067599728"
+    }
+  },
+  "parameters": {
+    "prefix": {
+      "type": "string",
+      "defaultValue": "tfso",
+      "minLength": 2,
+      "maxLength": 8,
+      "metadata": {
+        "description": "Short name prefix (2-8 lowercase letters/digits, starting with a letter)"
+      }
+    },
+    "environment": {
+      "type": "string",
+      "defaultValue": "dev",
+      "allowedValues": [
+        "dev",
+        "test",
+        "prod"
+      ],
+      "metadata": {
+        "description": "Environment to create"
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[deployment().location]",
+      "metadata": {
+        "description": "Azure region for every resource"
+      }
+    },
+    "apimPublisherEmail": {
+      "type": "string",
+      "metadata": {
+        "description": "API Management publisher e-mail (required by APIM)"
+      }
+    },
+    "apimSku": {
+      "type": "string",
+      "defaultValue": "Developer",
+      "allowedValues": [
+        "Developer",
+        "Consumption",
+        "BasicV2",
+        "StandardV2",
+        "Basic",
+        "Standard",
+        "Premium"
+      ],
+      "metadata": {
+        "description": "API Management SKU. Developer ≈ 30-45 min to provision; Consumption/BasicV2 are faster"
+      }
+    },
+    "repositoryUrl": {
+      "type": "string",
+      "defaultValue": "https://github.com/amitagrawal09/tf-data-product-so",
+      "metadata": {
+        "description": "GitHub repository that holds this solution"
+      }
+    },
+    "repositoryRef": {
+      "type": "string",
+      "defaultValue": "claude/dreamy-shannon-1j1v3d",
+      "metadata": {
+        "description": "Branch, tag or commit to deploy"
+      }
+    },
+    "gitHubToken": {
+      "type": "securestring",
+      "defaultValue": "",
+      "metadata": {
+        "description": "GitHub token with read access to the repository (only needed for private repositories)"
+      }
+    },
+    "loadDemoData": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Load demo orders across all regions after deployment (ignored for prod)"
+      }
+    },
+    "runSmokeTest": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Run the end-to-end smoke test through API Management after deployment"
+      }
+    },
+    "d365Url": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Dynamics 365 F&O URL. Leave empty to run the D365 simulator."
+      }
+    },
+    "d365TenantId": {
+      "type": "string",
+      "defaultValue": ""
+    },
+    "d365ClientId": {
+      "type": "string",
+      "defaultValue": ""
+    },
+    "d365ClientSecret": {
+      "type": "securestring",
+      "defaultValue": ""
+    },
+    "d365Company": {
+      "type": "string",
+      "defaultValue": "usmf"
+    },
+    "forceUpdateTag": {
+      "type": "string",
+      "defaultValue": "[utcNow()]",
+      "metadata": {
+        "description": "Changes on every deployment so the deployment script re-runs (leave the default)"
+      }
+    }
+  },
+  "variables": {
+    "rgName": "[format('rg-{0}-{1}', parameters('prefix'), parameters('environment'))]",
+    "tags": {
+      "data-product": "sales-order",
+      "environment": "[parameters('environment')]",
+      "managed-by": "oneclick"
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Resources/resourceGroups",
+      "apiVersion": "2022-09-01",
+      "name": "[variables('rgName')]",
+      "location": "[parameters('location')]",
+      "tags": "[variables('tags')]"
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[format('tfso-oneclick-{0}', parameters('environment'))]",
+      "resourceGroup": "[variables('rgName')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "prefix": {
+            "value": "[parameters('prefix')]"
+          },
+          "environment": {
+            "value": "[parameters('environment')]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "tags": {
+            "value": "[variables('tags')]"
+          },
+          "apimPublisherEmail": {
+            "value": "[parameters('apimPublisherEmail')]"
+          },
+          "apimSku": {
+            "value": "[parameters('apimSku')]"
+          },
+          "repositoryUrl": {
+            "value": "[parameters('repositoryUrl')]"
+          },
+          "repositoryRef": {
+            "value": "[parameters('repositoryRef')]"
+          },
+          "gitHubToken": {
+            "value": "[parameters('gitHubToken')]"
+          },
+          "loadDemoData": {
+            "value": "[and(parameters('loadDemoData'), not(equals(parameters('environment'), 'prod')))]"
+          },
+          "runSmokeTest": {
+            "value": "[parameters('runSmokeTest')]"
+          },
+          "d365Url": {
+            "value": "[parameters('d365Url')]"
+          },
+          "d365TenantId": {
+            "value": "[parameters('d365TenantId')]"
+          },
+          "d365ClientId": {
+            "value": "[parameters('d365ClientId')]"
+          },
+          "d365ClientSecret": {
+            "value": "[parameters('d365ClientSecret')]"
+          },
+          "d365Company": {
+            "value": "[parameters('d365Company')]"
+          },
+          "forceUpdateTag": {
+            "value": "[parameters('forceUpdateTag')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.49.2.45890",
+              "templateHash": "17949832780290881294"
+            }
+          },
+          "parameters": {
+            "prefix": {
+              "type": "string"
+            },
+            "environment": {
+              "type": "string"
+            },
+            "location": {
+              "type": "string"
+            },
+            "tags": {
+              "type": "object"
+            },
+            "apimPublisherEmail": {
+              "type": "string"
+            },
+            "apimSku": {
+              "type": "string"
+            },
+            "repositoryUrl": {
+              "type": "string"
+            },
+            "repositoryRef": {
+              "type": "string"
+            },
+            "gitHubToken": {
+              "type": "securestring"
+            },
+            "loadDemoData": {
+              "type": "bool"
+            },
+            "runSmokeTest": {
+              "type": "bool"
+            },
+            "d365Url": {
+              "type": "string"
+            },
+            "d365TenantId": {
+              "type": "string"
+            },
+            "d365ClientId": {
+              "type": "string"
+            },
+            "d365ClientSecret": {
+              "type": "securestring"
+            },
+            "d365Company": {
+              "type": "string"
+            },
+            "forceUpdateTag": {
+              "type": "string"
+            }
+          },
+          "variables": {
+            "$fxv#0": "#!/bin/bash\n# Runs inside the Azure deployment-script container (Azure CLI image), signed in as the deployer\n# managed identity. Downloads the repository and runs ./deploy.sh azure.\nset -euo pipefail\n\nlog() { printf '[oneclick %s] %s\\n' \"$(date -u +%H:%M:%S)\" \"$*\"; }\n\n: \"${REPO_URL:?}\" \"${REPO_REF:?}\" \"${RG:?}\" \"${ENVIRONMENT:?}\"\n\n# ---------------------------------------------------------------- source code\nowner_repo=\"${REPO_URL#https://github.com/}\"\nowner_repo=\"${owner_repo%.git}\"\nowner_repo=\"${owner_repo%/}\"\nwork=\"$(mktemp -d)\"\nlog \"Downloading ${owner_repo}@${REPO_REF}\"\ncurl_args=(-fsSL --retry 5 --retry-delay 5 -H \"Accept: application/vnd.github+json\" -o \"$work/src.tgz\")\nif [[ -n \"${REPO_TOKEN:-}\" ]]; then\n  curl_args+=(-H \"Authorization: Bearer ${REPO_TOKEN}\")\nfi\nif ! curl \"${curl_args[@]}\" \"https://api.github.com/repos/${owner_repo}/tarball/${REPO_REF}\"; then\n  log \"ERROR: could not download the repository. For a private repository supply gitHubToken (read access to contents).\"\n  exit 1\nfi\nmkdir -p \"$work/src\"\ntar -xzf \"$work/src.tgz\" -C \"$work/src\" --strip-components=1\ncd \"$work/src\"\nchmod +x deploy.sh\nlog \"Source ready ($(du -sh . | cut -f1))\"\n\n# ---------------------------------------------------------------- wait for the Owner role assignment\nfor i in $(seq 1 30); do\n  rg_id=\"$(az group show -n \"$RG\" --query id -o tsv 2>/dev/null || true)\"\n  if [[ -n \"$rg_id\" ]] && az role assignment list --scope \"$rg_id\" \\\n       --query \"[?principalId=='${DEPLOYER_PRINCIPAL_ID}' && roleDefinitionName=='Owner'] | length(@)\" -o tsv 2>/dev/null \\\n       | grep -q '^[1-9]'; then\n    log \"deployer role assignment visible\"\n    break\n  fi\n  log \"waiting for the deployer role assignment to propagate ($i/30)\"\n  sleep 10\ndone\nsleep 30  # authorization caches\n\n# ---------------------------------------------------------------- python for smoke test / demo data\nif [[ \"${SKIP_SMOKE:-false}\" != \"true\" || \"${LOAD_DEMO_DATA:-false}\" == \"true\" ]]; then\n  if ! python3 -m venv \"$work/venv-probe\" >/dev/null 2>&1; then\n    log \"python3 venv not available in this container - platform will deploy, smoke test and demo data are skipped\"\n    export SKIP_SMOKE=true LOAD_DEMO_DATA=false\n  fi\nfi\n\n# ---------------------------------------------------------------- deploy\nexport ASSUME_YES=true PYTHON=\"${PYTHON:-python3}\"\nlog \"Running ./deploy.sh azure (environment=${ENVIRONMENT}, rg=${RG}, apim=${APIM_SKU:-Developer})\"\n./deploy.sh azure\n\n# ---------------------------------------------------------------- outputs for the template\noutputs=\"$(az deployment group show -g \"$RG\" -n \"tfso-${ENVIRONMENT}\" --query properties.outputs -o json)\"\nconsole=\"$(echo \"$outputs\" | jq -r '.staticWebsiteUrl.value // \"\"')\"\ngateway=\"$(echo \"$outputs\" | jq -r '.apimGatewayUrl.value // \"\"')\"\njq -n --arg c \"$console\" --arg g \"${gateway%/}\" --arg r \"$RG\" \\\n  '{consoleUrl: $c, apiGatewayUrl: $g, resourceGroup: $r}' >\"$AZ_SCRIPTS_OUTPUT_PATH\"\nlog \"Done. Console: ${console}  API gateway: ${gateway}\"\n",
+            "ownerRoleId": "8e3af657-a8ff-443c-a75c-2fe8c4bcb635",
+            "tokenEnv": "[if(empty(parameters('gitHubToken')), createArray(), createArray(createObject('name', 'REPO_TOKEN', 'secureValue', parameters('gitHubToken'))))]",
+            "d365Env": "[if(empty(parameters('d365Url')), createArray(), createArray(createObject('name', 'D365_URL', 'value', parameters('d365Url')), createObject('name', 'D365_TENANT_ID', 'value', parameters('d365TenantId')), createObject('name', 'D365_CLIENT_ID', 'value', parameters('d365ClientId')), createObject('name', 'D365_CLIENT_SECRET', 'secureValue', parameters('d365ClientSecret'))))]"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.ManagedIdentity/userAssignedIdentities",
+              "apiVersion": "2023-01-31",
+              "name": "[format('id-{0}-{1}-deployer', parameters('prefix'), parameters('environment'))]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]"
+            },
+            {
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "name": "[guid(resourceGroup().id, resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-{0}-{1}-deployer', parameters('prefix'), parameters('environment'))), variables('ownerRoleId'))]",
+              "properties": {
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('ownerRoleId'))]",
+                "principalId": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-{0}-{1}-deployer', parameters('prefix'), parameters('environment'))), '2023-01-31').principalId]",
+                "principalType": "ServicePrincipal",
+                "description": "One-click deployer for the Sales Order data product (resource-group scope)"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-{0}-{1}-deployer', parameters('prefix'), parameters('environment')))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Resources/deploymentScripts",
+              "apiVersion": "2023-08-01",
+              "name": "[format('ds-{0}-{1}-deploy', parameters('prefix'), parameters('environment'))]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "kind": "AzureCLI",
+              "identity": {
+                "type": "UserAssigned",
+                "userAssignedIdentities": {
+                  "[format('{0}', resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-{0}-{1}-deployer', parameters('prefix'), parameters('environment'))))]": {}
+                }
+              },
+              "properties": {
+                "azCliVersion": "2.63.0",
+                "timeout": "PT2H",
+                "retentionInterval": "PT1D",
+                "cleanupPreference": "OnSuccess",
+                "forceUpdateTag": "[parameters('forceUpdateTag')]",
+                "environmentVariables": "[concat(createArray(createObject('name', 'PREFIX', 'value', parameters('prefix')), createObject('name', 'ENVIRONMENT', 'value', parameters('environment')), createObject('name', 'LOCATION', 'value', parameters('location')), createObject('name', 'RG', 'value', resourceGroup().name), createObject('name', 'APIM_PUBLISHER_EMAIL', 'value', parameters('apimPublisherEmail')), createObject('name', 'APIM_SKU', 'value', parameters('apimSku')), createObject('name', 'REPO_URL', 'value', parameters('repositoryUrl')), createObject('name', 'REPO_REF', 'value', parameters('repositoryRef')), createObject('name', 'LOAD_DEMO_DATA', 'value', if(parameters('loadDemoData'), 'true', 'false')), createObject('name', 'SKIP_SMOKE', 'value', if(parameters('runSmokeTest'), 'false', 'true')), createObject('name', 'D365_COMPANY', 'value', parameters('d365Company')), createObject('name', 'DEPLOYER_PRINCIPAL_ID', 'value', reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-{0}-{1}-deployer', parameters('prefix'), parameters('environment'))), '2023-01-31').principalId)), variables('tokenEnv'), variables('d365Env'))]",
+                "scriptContent": "[variables('$fxv#0')]"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-{0}-{1}-deployer', parameters('prefix'), parameters('environment')))]",
+                "[resourceId('Microsoft.Authorization/roleAssignments', guid(resourceGroup().id, resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-{0}-{1}-deployer', parameters('prefix'), parameters('environment'))), variables('ownerRoleId')))]"
+              ]
+            }
+          ],
+          "outputs": {
+            "consoleUrl": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.Resources/deploymentScripts', format('ds-{0}-{1}-deploy', parameters('prefix'), parameters('environment'))), '2023-08-01').outputs.consoleUrl]"
+            },
+            "apiGatewayUrl": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.Resources/deploymentScripts', format('ds-{0}-{1}-deploy', parameters('prefix'), parameters('environment'))), '2023-08-01').outputs.apiGatewayUrl]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', variables('rgName'))]"
+      ]
+    }
+  ],
+  "outputs": {
+    "resourceGroup": {
+      "type": "string",
+      "value": "[variables('rgName')]"
+    },
+    "consoleUrl": {
+      "type": "string",
+      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('rgName')), 'Microsoft.Resources/deployments', format('tfso-oneclick-{0}', parameters('environment'))), '2025-04-01').outputs.consoleUrl.value]"
+    },
+    "apiGatewayUrl": {
+      "type": "string",
+      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('rgName')), 'Microsoft.Resources/deployments', format('tfso-oneclick-{0}', parameters('environment'))), '2025-04-01').outputs.apiGatewayUrl.value]"
+    },
+    "orderStatusApi": {
+      "type": "string",
+      "value": "[format('{0}/process/v1/orders/{{orderId}}/status', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('rgName')), 'Microsoft.Resources/deployments', format('tfso-oneclick-{0}', parameters('environment'))), '2025-04-01').outputs.apiGatewayUrl.value)]"
+    }
+  }
+}
