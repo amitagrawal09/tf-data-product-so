@@ -103,8 +103,8 @@ c.push(new Paragraph({ spacing: { before: 240, after: 80 }, children: runs("Thre
 c.push(SP());
 c.push(TABLE(["Item", "Value"], [
   ["Document", "GetOrderStatus API: Solution Design Document"],
-  ["Version", "1.0"],
-  ["Date", "15 November 2026"],
+  ["Version", "1.1"],
+  ["Date", "16 November 2026"],
   ["Status", "Draft for review"],
   ["Owner", "Sales Order data product owner (to be named)"],
   ["Classification", "Internal"],
@@ -116,6 +116,7 @@ c.push(H2("Revision history"));
 c.push(TABLE(["Version", "Date", "Author", "Summary"], [
   ["0.1", "13 Nov 2026", "Solution architecture", "Initial API outline from the Sales Order data product deck (slides 5, 10, 11, 12)"],
   ["1.0", "15 Nov 2026", "Solution architecture", "Complete design: query patterns, operation specifications, status model, CDM 1.1.0, regional scope filters, Azure reference architecture, security and operations"],
+  ["1.1", "16 Nov 2026", "Solution architecture", "Operational data store changed from Azure Database for PostgreSQL to Databricks Lakebase (Postgres-compatible OLTP in Azure Databricks, governed by Unity Catalog). Updated architecture, diagrams, components, request path, resilience, decisions and risks; added §6.3 Why Databricks Lakebase"],
 ], [1100, 1500, 2000, 4760]));
 c.push(H2("Approvals"));
 c.push(TABLE(["Role", "Name", "Signature / decision", "Date"], [
@@ -220,7 +221,7 @@ c.push(...FIG("d1.png", 624, 363, "Three-tier, API-led architecture. The green p
 c.push(H2("3.2 Tier responsibilities"));
 c.push(TABLE(["Tier", "Responsibility", "Components"], [
   ["Tier 1 · Capture", "Receive orders in any format; present status to people and systems", "EDI trading partners (AS2/VAN), e-mail inbox, customer portal and CS console, partner systems, status consumers, data marketplace users"],
-  ["Tier 2 · Integrate", "Validate, enrich, source, canonicalize and publish orders; orchestrate fulfilment; keep one status; serve queries and events", "API Management; Experience, Process and System APIs (Azure Container Apps); PostgreSQL data product store; Service Bus; Event Hubs; Key Vault"],
+  ["Tier 2 · Integrate", "Validate, enrich, source, canonicalize and publish orders; orchestrate fulfilment; keep one status; serve queries and events", "API Management; Experience, Process and System APIs (Azure Container Apps); Databricks Lakebase data product store; Service Bus; Event Hubs; Key Vault"],
   ["Tier 3 · Fulfil", "Create, reserve, release, ship, deliver and invoice; analytics", "D365 F&O, WMS, TMS, CRM, Azure Databricks (bronze, silver, gold)"],
 ], [1800, 3600, 3960]));
 c.push(H2("3.3 API-led layers and where GetOrderStatus lives"));
@@ -240,13 +241,13 @@ c.push(TABLE(["Consumer", "Path", "Why"], [
 c.push(H2("3.5 How status stays current (write side vs read side)"));
 c.push(P("GetOrderStatus is a **read model**. It never calls D365 or the warehouse at query time, which keeps it fast and available even when a system of record is slow."));
 c.push(B("**Write side:** order intake and status events from D365, WMS and TMS (through the System API and the `system-status-events` topic) are applied by the Process API. Every change updates the canonical order and appends an immutable history entry in one database transaction, which also queues an `OrderStatusChanged` event (transactional outbox)."));
-c.push(B("**Read side:** GetOrderStatus reads the canonical order document and indexed projection columns (status, customer, PO, region, site and so on) from PostgreSQL."));
+c.push(B("**Read side:** GetOrderStatus reads the canonical order document and indexed projection columns (status, customer, PO, region, site and so on) from Databricks Lakebase, a Postgres-compatible operational database inside Azure Databricks."));
 c.push(B("**Push:** the outbox publishes `OrderStatusChanged` CloudEvents to Service Bus (`sales-order-events`) and Event Hubs. Subscribers include the lakehouse, CRM and signed customer webhooks."));
 c.push(H2("3.6 Key design decisions"));
 c.push(TABLE(["ID", "Decision", "Rationale", "Alternatives considered"], [
   ["AD-01", "GetOrderStatus lives in the Process layer; Experience APIs only shape it", "One status for every channel; customer views cannot drift", "Status per channel API (rejected: duplicated logic)"],
   ["AD-02", "Query a persisted read model, never the ERP at request time", "Latency, availability and cost independent of D365", "Live D365 OData calls (rejected: slow, couples uptime)"],
-  ["AD-03", "Canonical document in PostgreSQL JSONB plus indexed projection columns", "Flexible contract with fast, indexed filters", "Cosmos DB (viable; PostgreSQL chosen for relational queries and cost)"],
+  ["AD-03", "Canonical document in Databricks Lakebase (Postgres-compatible, JSONB) plus indexed projection columns", "Millisecond point reads and transactions for the live API; governed in Unity Catalog with the Delta lakehouse, so operational and analytical order data share one Databricks platform", "Azure Database for PostgreSQL (current implementation; drop-in fallback). Delta tables with a Databricks SQL warehouse (rejected for the live API: latency in seconds, costly row updates). Cosmos DB"],
   ["AD-04", "Append-only history table and CloudEvents via a transactional outbox", "Audit, replay and exactly-once effects over at-least-once messaging", "Dual writes (rejected: lost or duplicated events)"],
   ["AD-05", "APIM as the single front door with a read-only Order Status product", "Central security, quotas, analytics and versioning", "Direct ingress to Container Apps (rejected)"],
   ["AD-06", "Region, site and account scope are first-class query filters", "The business runs by region and by national account", "Client-side filtering (rejected: paging and security)"],
@@ -580,7 +581,7 @@ c.push(B("**Transport and secrets:** TLS 1.2+, secrets in Key Vault, CORS restri
 c.push(H2("4.9 Performance and scalability"));
 c.push(B("**Projection columns with indexes:** status, status_category, customer_id, customer_po (plus a composite index with customer), erp_sales_order_id, received_at, region, ship_from_warehouse and account_scope serve the search filters without parsing JSON."));
 c.push(B("**Single-order queries** are primary-key reads of one document plus the latest history row. History is indexed by (order_id, sequence)."));
-c.push(B("**Horizontal scale:** the Process API runs 1–3 replicas in dev/test and 2–10 in production on Azure Container Apps; PostgreSQL Flexible Server scales vertically and adds read replicas for heavy analytics."));
+c.push(B("**Horizontal scale:** the Process API runs 1–3 replicas in dev/test and 2–10 in production on Azure Container Apps; the Lakebase instance scales its compute capacity and can add readable secondaries for heavy read traffic; analytics query Delta tables, not the operational store."));
 c.push(B("**Guidance for consumers:** use ETag/If-None-Match for polling, use webhooks or the event stream instead of tight polling loops, and keep pageSize ≤ 50 when requesting full documents."));
 
 // 4.10 availability
@@ -588,7 +589,7 @@ c.push(H2("4.10 Availability and resilience"));
 c.push(B("Queries do not depend on D365, WMS or TMS being available (read model)."));
 c.push(B("Multiple replicas behind Container Apps ingress with health probes on /health; zone-redundant options in production."));
 c.push(B("Messaging is at-least-once with idempotent consumers; outbox retries with exponential backoff preserve per-order ordering."));
-c.push(B("PostgreSQL point-in-time restore (geo-redundant backups in production); RPO 15 minutes, RTO 4 hours."));
+c.push(B("Lakebase high availability and point-in-time restore; targets RPO 15 minutes, RTO 4 hours (confirm against Lakebase SLAs in the chosen region)."));
 
 // 4.11 observability
 c.push(H2("4.11 Observability"));
@@ -609,7 +610,7 @@ c.push(TABLE(["Level", "Coverage"], [
   ["Contract", "JSON Schema 2020-12 files generated from the CDM model (cdm/*.schema.json); every published order is validated against the model"],
   ["Performance (recommended)", "Load test of Q1/Q3 at 200 rps against a production-sized dataset before go-live"],
 ], [2600, 6760]));
-c.push(...FIG("d2.png", 624, 244, "GetOrderStatus request flow through API Management to the Process API and PostgreSQL"));
+c.push(...FIG("d2.png", 624, 244, "GetOrderStatus request flow through API Management to the Process API and Databricks Lakebase"));
 
 // ---------- 5 CDM
 c.push(H1("5. Canonical Data Model (CDM)"));
@@ -785,49 +786,68 @@ c.push(...CODE(`{
 c.push(H1("6. Azure reference architecture"));
 c.push(H2("6.1 Overview"));
 c.push(P("The solution runs on Azure Integration Services and Azure Container Apps, with Azure Databricks as the data hub (deck slide 11). API Management is the only public entry point for APIs; the Order Operations Console is a static website that calls APIM."));
+c.push(P("The operational data store is **Databricks Lakebase**: a managed, Postgres-compatible OLTP database that runs inside the Azure Databricks workspace. GetOrderStatus therefore reads from the same Databricks platform that hosts the Delta lakehouse, and both are governed by Unity Catalog."));
 c.push(...FIG("d4.png", 624, 374, "Azure reference architecture"));
 c.push(H2("6.2 Components"));
 c.push(TABLE(["Azure service", "Role (GetOrderStatus in bold)", "Dev / test", "Production"], [
   ["API Management", "**Front door: auth, products, quotas, rate limit, CORS, correlation, backend key**", "Developer (or Consumption / BasicV2)", "Premium (zones, VNet) or StandardV2"],
   ["Azure Container Apps", "**Process API hosts GetOrderStatus**; Experience and System APIs", "0.5 vCPU / 1 GiB, 1–3 replicas", "2–10 replicas, zone-redundant environment"],
-  ["Azure Database for PostgreSQL Flexible Server 16", "**Read model**: canonical orders (JSONB), projections, history, documents", "Burstable B1ms, 32 GB", "General Purpose D2ds_v5, 128 GB, HA, geo-backup"],
+  ["Databricks Lakebase (in the Azure Databricks workspace)", "**Read model and transactional store**: canonical orders (JSONB), projections, history, documents, outbox; Postgres-compatible; governed by Unity Catalog", "Smallest capacity instance", "Larger capacity with high availability and readable secondaries; size after load test"],
   ["Azure Service Bus (Standard)", "Commands and status events; sales-order-events for push; DLQ", "Standard", "Premium (geo-DR) recommended"],
   ["Azure Event Hubs", "order-status-stream for Databricks", "Standard, 1 TU", "Standard/Premium, auto-inflate"],
   ["Azure Key Vault (RBAC)", "Backend API key, DB credentials, D365 secret", "Standard", "Standard, private endpoint"],
   ["Managed identities", "Services to Azure resources; deployment identities", "User-assigned", "User-assigned"],
   ["Azure Container Registry", "Service image", "Basic", "Premium (geo-replication)"],
-  ["ADLS Gen2 + Azure Databricks", "Bronze, silver and gold; KPIs and regional marts; Delta Sharing", "Standard LRS", "ZRS/GRS, Unity Catalog"],
+  ["Azure Databricks workspace (Premium) + ADLS Gen2", "Hosts Lakebase; bronze, silver and gold Delta tables; KPIs and regional marts; Delta Sharing; Unity Catalog", "Premium workspace, Standard LRS", "Premium, Private Link, ZRS/GRS storage"],
   ["Storage static website", "Order Operations Console", "Standard LRS", "Behind Front Door / App Gateway WAF"],
   ["Azure AI Document Intelligence", "E-mailed PDF orders (intake)", "S0", "S0"],
   ["Azure Monitor, Application Insights, Log Analytics", "**Tracing, APIM analytics, alerts**", "30-day retention", "90-day retention, alerts"],
   ["Microsoft Entra ID", "Users, tokens, GitHub OIDC for deployment", "", ""],
 ], [2500, 3100, 1880, 1880], { size: 16 }));
-c.push(H2("6.3 GetOrderStatus request path in Azure")); NEWLIST();
+c.push(H2("6.3 Why Databricks Lakebase"));
+c.push(P("GetOrderStatus needs an operational store: millisecond point reads, indexed filters, and transactions that write the order, its history entry and the outbox message together. Lakebase provides this as a Postgres-compatible database managed by Databricks, so the data product lives on one governed platform."));
+c.push(TABLE(["Requirement", "How Lakebase meets it"], [
+  ["p95 < 300 ms single-order reads; indexed search", "Row-store OLTP engine with B-tree indexes on the projection columns; primary-key reads of the JSONB order document"],
+  ["One transaction for order + history + outbox", "Standard PostgreSQL transactions, so the transactional outbox and idempotent inbox work unchanged"],
+  ["Flexible canonical document", "JSONB columns for the CDM document, with relational projection columns for filters"],
+  ["Governance and lineage", "Lakebase databases are registered in Unity Catalog alongside the Delta tables: one place for permissions, lineage and discovery (Purview integration through Unity Catalog)"],
+  ["Analytics without loading the API", "Order events still stream to bronze Delta tables; silver and gold are built in Databricks. Gold results such as regional performance can be synced back into Lakebase tables if the API needs to serve them"],
+  ["Scale and availability", "Capacity scales independently of the Container Apps; high availability and readable secondaries in production; point-in-time restore"],
+], [3000, 6360]));
+c.push(H3("Impact on the current implementation"));
+c.push(B("The repository's services and infrastructure currently use Azure Database for PostgreSQL Flexible Server. Because Lakebase speaks the PostgreSQL protocol, the services' data access (SQLAlchemy with the psycopg driver, JSONB, transactions) does not change."));
+c.push(B("Migration steps:"));
+c.push(B("Provision a Lakebase instance and databases in the Databricks workspace (Bicep plus the Databricks API).", 1));
+c.push(B("Point `TFSO_DB_URL` at the Lakebase endpoint.", 1));
+c.push(B("Authenticate with a Databricks service principal: short-lived OAuth tokens, refreshed by the connection layer, or a native Postgres role with the password in Key Vault.", 1));
+c.push(B("Remove the PostgreSQL Flexible Server.", 1));
+c.push(B("This document describes the target state; the migration is scheduled after the region and SLA check (R-4, D-5)."));
+c.push(H2("6.4 GetOrderStatus request path in Azure")); NEWLIST();
 c.push(N("A consumer calls `https://<apim>.azure-api.net/process/v1/orders/{id}/status` with a subscription key (and, in production, an Entra ID token)."));
 c.push(N("APIM validates the key and token, applies the product policy (read-only, quota) and the rate limit, sets x-correlation-id, and injects the backend x-api-key from Key Vault."));
 c.push(N("APIM forwards over TLS to the Process API Container App, which validates the key and runs the query."));
-c.push(N("The Process API reads PostgreSQL (primary key or indexed projection) and returns the view with an ETag."));
+c.push(N("The Process API reads Databricks Lakebase over the PostgreSQL protocol (primary key or indexed projection) and returns the view with an ETag."));
 c.push(N("APIM logs the call to Application Insights; the correlation id ties the gateway, service and database spans together."));
-c.push(H2("6.4 Event path: how status reaches the read model and subscribers")); NEWLIST();
+c.push(H2("6.5 Event path: how status reaches the read model and subscribers")); NEWLIST();
 c.push(N("D365 business events, WMS ship confirmations and TMS proof of delivery reach the System API (webhooks or Logic Apps)."));
 c.push(N("The System API publishes StatusEvents to Service Bus `system-status-events`."));
 c.push(N("The Process API applies each event idempotently, updates the canonical order and history, and writes an outbox message in the same transaction."));
 c.push(N("The outbox publishes `OrderStatusChanged` to Service Bus `sales-order-events` (lakehouse, CRM, webhooks) and Event Hubs `order-status-stream` (Databricks)."));
-c.push(H2("6.5 Security and identity"));
+c.push(H2("6.6 Security and identity"));
 c.push(B("Entra ID for users, APIM subscriptions for applications, managed identities between Azure services; no secrets in code or configuration files."));
 c.push(B("RBAC on data planes: Key Vault Secrets User, Service Bus Data Sender and Receiver, Event Hubs Data Sender, Storage Blob Data Contributor, AcrPull, each granted to the workload identity only."));
 c.push(B("Deployment uses GitHub OIDC federation (no stored client secret) or a deployment identity with Owner on the resource group only, plus a custom role limited to registering the required resource providers."));
-c.push(B("Production hardening: private endpoints for PostgreSQL, Key Vault, Service Bus and storage; APIM in internal VNet mode behind Application Gateway WAF; Defender for Cloud."));
-c.push(H2("6.6 Networking"));
+c.push(B("Production hardening: Private Link for the Databricks workspace and Lakebase, private endpoints for Key Vault, Service Bus and storage; APIM in internal VNet mode behind Application Gateway WAF; Defender for Cloud."));
+c.push(H2("6.7 Networking"));
 c.push(TABLE(["Environment", "Network design"], [
-  ["Dev / test", "Public endpoints restricted by keys and RBAC; Container Apps ingress reachable only with the APIM-injected backend key; PostgreSQL firewall allows Azure services"],
+  ["Dev / test", "Public endpoints restricted by keys and RBAC; Container Apps ingress reachable only with the APIM-injected backend key; Lakebase access restricted to the Container Apps outbound IPs and the deployment identity"],
   ["Production", "Hub-spoke VNet; Container Apps environment with internal ingress; private endpoints for data services; APIM Premium in internal mode behind Application Gateway WAF; egress through Azure Firewall"],
 ], [2000, 7360]));
-c.push(H2("6.7 Resilience, DR and operations"));
-c.push(B("Zone redundancy for Container Apps, PostgreSQL HA and APIM Premium in production."));
-c.push(B("PostgreSQL point-in-time restore and geo-redundant backup (RPO 15 min, RTO 4 h); Service Bus geo-DR pairing; replay from the outbox or bronze to rebuild consumers."));
+c.push(H2("6.8 Resilience, DR and operations"));
+c.push(B("Zone redundancy for Container Apps and APIM Premium, and Lakebase high availability, in production."));
+c.push(B("Lakebase point-in-time restore (targets RPO 15 min, RTO 4 h; confirm cross-region options); Service Bus geo-DR pairing; replay from the outbox or bronze Delta tables to rebuild consumers or the operational store."));
 c.push(B("Alerts on latency, error rate, outbox backlog, dead-letter queues and data freshness."));
-c.push(H2("6.8 Deployment"));
+c.push(H2("6.9 Deployment"));
 c.push(P("All infrastructure is Bicep (`infra/`). `deploy.sh azure` provisions the platform, builds the image in ACR, rolls out the Container Apps, configures APIM, publishes the console and runs the smoke test. One-click options:"));
 c.push(B("GitHub Actions workflow **Deploy to Azure** (OIDC, approvals per environment)."));
 c.push(B("Azure portal Template Spec."));
@@ -842,10 +862,12 @@ c.push(TABLE(["ID", "Item", "Type", "Mitigation / recommendation"], [
   ["R-3", "Customer data exposure through internal routes", "Risk", "Customers and partners use Experience APIs only; read-only internal product; token claims for customer scoping"],
   ["A-1", "Regions and sites in the seed data are illustrative", "Assumption", "Replace with the actual facility network and D365 warehouses before pilot"],
   ["A-2", "D365 business events are available for status changes", "Assumption", "Confirm event catalogue with the D365 team; WMS/TMS webhooks as fallback"],
+  ["R-4", "Databricks Lakebase availability, SLA or limits in the target Azure region do not meet the API targets", "Risk", "Confirm with Databricks before build; load-test Q1/Q3; Azure Database for PostgreSQL is a drop-in fallback (same protocol, current implementation)"],
   ["D-1", "Definition of \"on time\" (requested date vs appointment window)", "Decision", "Start with the requested delivery date"],
   ["D-2", "Production authentication for partners (subscription key only vs key + OAuth)", "Decision", "Key + Entra ID client credentials for production partners"],
   ["D-3", "Webhook retry policy and auto-disable thresholds", "Decision", "Retry with backoff for 24 h, then disable and notify"],
   ["D-4", "Data retention for history (7 years) and documents", "Decision", "Confirm with legal and finance"],
+  ["D-5", "Adopt Databricks Lakebase as the production operational store", "Decision", "Approve after the region/SLA check and load test (R-4); migrate the current PostgreSQL implementation by configuration"],
 ], [700, 3300, 1300, 4060], { size: 17 }));
 
 // ---------- Appendix
@@ -912,7 +934,7 @@ const doc = new Document({
       default: new Footer({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [
         new TextRun({ text: "Page ", size: 16, color: "4B5A51" }), new TextRun({ children: [PageNumber.CURRENT], size: 16, color: "4B5A51" }),
         new TextRun({ text: " of ", size: 16, color: "4B5A51" }), new TextRun({ children: [PageNumber.TOTAL_PAGES], size: 16, color: "4B5A51" }),
-        new TextRun({ text: "   ·   Version 1.0 · 15 November 2026", size: 16, color: "4B5A51" })] })] }),
+        new TextRun({ text: "   ·   Version 1.1 · 16 November 2026", size: 16, color: "4B5A51" })] })] }),
       first: new Footer({ children: [new Paragraph({ children: [] })] }),
     },
     children: c,

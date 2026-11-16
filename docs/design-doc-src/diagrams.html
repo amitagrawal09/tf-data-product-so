@@ -65,7 +65,7 @@
   <text x="605" y="406" text-anchor="middle" font-size="10" fill="#e8f5ea">/order-events · /orders/at-risk</text>
   <text x="605" y="420" text-anchor="middle" font-size="10" fill="#e8f5ea">/exceptions · /metrics/kpis</text>
   <text x="605" y="434" text-anchor="middle" font-size="10" fill="#e8f5ea">/status/summary · webhooks</text>
-  <rect x="522" y="472" width="166" height="56" rx="6" fill="#fff4e0" stroke="#d9a441"/><text x="605" y="494" text-anchor="middle" class="s">Sales Order data product</text><text x="605" y="510" text-anchor="middle" class="xs">PostgreSQL · order_history</text>
+  <rect x="522" y="472" width="166" height="56" rx="6" fill="#fff4e0" stroke="#d9a441"/><text x="605" y="494" text-anchor="middle" class="s">Sales Order data product</text><text x="605" y="510" text-anchor="middle" class="xs">Databricks Lakebase · order_history</text>
   <rect x="522" y="536" width="166" height="56" rx="6" fill="#fff4e0" stroke="#d9a441"/><text x="605" y="558" text-anchor="middle" class="s">Outbox → Service Bus</text><text x="605" y="574" text-anchor="middle" class="xs">sales-order-events · commands</text>
 
   <!-- System layer -->
@@ -115,7 +115,7 @@
     <rect x="30" y="48" width="160" height="40" rx="7" fill="#fff" stroke="#9aa79f"/><text x="110" y="73" text-anchor="middle" class="l">Consumer</text>
     <rect x="250" y="48" width="180" height="40" rx="7" fill="#fff" stroke="#2b7a3d"/><text x="340" y="73" text-anchor="middle" class="l">API Management</text>
     <rect x="490" y="48" width="200" height="40" rx="7" fill="#fff" stroke="#2b7a3d"/><text x="590" y="68" text-anchor="middle" class="l">Process API</text><text x="590" y="82" text-anchor="middle" class="xs">Container App (FastAPI)</text>
-    <rect x="750" y="48" width="200" height="40" rx="7" fill="#fff" stroke="#d9a441"/><text x="850" y="68" text-anchor="middle" class="l">PostgreSQL</text><text x="850" y="82" text-anchor="middle" class="xs">sales_orders · order_history</text>
+    <rect x="750" y="48" width="200" height="40" rx="7" fill="#fff" stroke="#d9a441"/><text x="850" y="68" text-anchor="middle" class="l">Databricks Lakebase</text><text x="850" y="82" text-anchor="middle" class="xs">Postgres-compatible OLTP · sales_orders</text>
   </g>
   <path d="M110,88 V410 M340,88 V410 M590,88 V410 M850,88 V410" stroke="#c9d2cc" stroke-dasharray="4 4"/>
   <path class="edge2" d="M110,115 H335" marker-end="url(#b)"/><text x="118" y="108" class="xs">GET /process/v1/orders/{id}/status · Ocp-Apim-Subscription-Key</text>
@@ -195,7 +195,7 @@
   <rect x="402" y="304" width="161" height="30" rx="5" fill="#fff"/><text x="482" y="324" text-anchor="middle" class="s">System API</text>
   <text x="482" y="347" text-anchor="middle" class="xs">KEDA autoscale · 1–10 replicas</text>
   <rect x="390" y="362" width="185" height="40" rx="7" fill="#fff" stroke="#9aa79f"/><text x="482" y="387" text-anchor="middle" class="l">Container Registry</text>
-  <rect x="590" y="80" width="185" height="56" rx="7" fill="#fff4e0" stroke="#d9a441"/><text x="682" y="102" text-anchor="middle" class="l">PostgreSQL Flexible</text><text x="682" y="118" text-anchor="middle" class="xs">tfso_process · tfso_system (JSONB)</text>
+  <rect x="590" y="80" width="185" height="56" rx="7" fill="#fff4e0" stroke="#d9a441"/><text x="682" y="102" text-anchor="middle" class="l">Databricks Lakebase</text><text x="682" y="118" text-anchor="middle" class="xs">OLTP · tfso_process · tfso_system</text>
   <rect x="590" y="146" width="185" height="56" rx="7" fill="#fff4e0" stroke="#d9a441"/><text x="682" y="168" text-anchor="middle" class="l">Service Bus (Standard)</text><text x="682" y="184" text-anchor="middle" class="xs">3 topics · 5 subscriptions · DLQ</text>
   <rect x="590" y="212" width="185" height="48" rx="7" fill="#fff4e0" stroke="#d9a441"/><text x="682" y="232" text-anchor="middle" class="l">Event Hubs</text><text x="682" y="248" text-anchor="middle" class="xs">order-status-stream</text>
   <rect x="590" y="270" width="185" height="48" rx="7" fill="#fff" stroke="#9aa79f"/><text x="682" y="290" text-anchor="middle" class="l">Key Vault (RBAC)</text><text x="682" y="306" text-anchor="middle" class="xs">secrets · Key Vault references</text>
@@ -209,7 +209,7 @@
   <rect x="825" y="238" width="240" height="44" rx="7" fill="#fff" stroke="#8e9bc9"/><text x="945" y="257" text-anchor="middle" class="l">Microsoft Entra ID</text><text x="945" y="272" text-anchor="middle" class="xs">identities · OIDC for CI/CD</text>
   <!-- data hub -->
   <rect x="230" y="485" width="850" height="155" rx="10" fill="#fdf6ea" stroke="#e2c58f"/>
-  <text x="655" y="507" text-anchor="middle" class="l">AZURE DATABRICKS · data hub (Delta Lake on ADLS Gen2, Unity Catalog)</text>
+  <text x="655" y="507" text-anchor="middle" class="l">AZURE DATABRICKS · data hub (Delta Lake on ADLS Gen2, Unity Catalog governs Lakebase + Delta)</text>
   <rect x="250" y="522" width="190" height="98" rx="7" fill="#fff" stroke="#d9a441"/><text x="345" y="544" text-anchor="middle" class="l">Bronze</text><text x="345" y="562" text-anchor="middle" class="xs">raw OrderStatusChanged events</text><text x="345" y="577" text-anchor="middle" class="xs">(ADLS container: bronze)</text>
   <rect x="460" y="522" width="190" height="98" rx="7" fill="#fff" stroke="#d9a441"/><text x="555" y="544" text-anchor="middle" class="l">Silver</text><text x="555" y="562" text-anchor="middle" class="xs">silver_sales_orders · order_history</text><text x="555" y="577" text-anchor="middle" class="xs">order snapshots (CDM 1.1.0)</text>
   <rect x="670" y="522" width="190" height="98" rx="7" fill="#fff" stroke="#d9a441"/><text x="765" y="544" text-anchor="middle" class="l">Gold</text><text x="765" y="562" text-anchor="middle" class="xs">status daily · cycle time</text><text x="765" y="577" text-anchor="middle" class="xs">touchless · ROI · regional</text><text x="765" y="592" text-anchor="middle" class="xs">performance</text>
