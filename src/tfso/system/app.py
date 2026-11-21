@@ -7,7 +7,10 @@ from contextlib import asynccontextmanager
 from datetime import date
 from typing import Any
 
-from fastapi import Body, FastAPI, Query, Request
+import json as _json
+from importlib import resources
+
+from fastapi import Body, Depends, FastAPI, Query, Request
 from pydantic import BaseModel
 from sqlalchemy import select
 
@@ -15,7 +18,7 @@ from ..common.bus import cloud_event, make_broker
 from ..common.config import Settings, get_settings
 from ..common.db import Database
 from ..common.outbox import Outbox, make_models
-from ..common.web import ApiError, correlation_id, create_app
+from ..common.web import ApiError, correlation_id, create_app, current_user, forbid
 from .d365_client import D365Client
 from .erp import CrmActivity, LiveD365, SimulatedErp, SystemBase, translate_business_event
 from .lakehouse import LakehouseWriter
@@ -72,6 +75,43 @@ def create_system_app(settings: Settings | None = None) -> FastAPI:
                      "System APIs over D365 F&O, WMS, TMS, CRM and the Lakehouse (Tier 2, system layer). "
                      "Includes the fulfilment simulator used in non-production environments.")
     app.router.lifespan_context = lifespan
+
+    def authorize(request: Request) -> None:
+        """System APIs are internal: service calls and internal users only; the simulator needs Orders.Operate."""
+        user = current_user(request)
+        if user.is_service:
+            return
+        path = request.url.path
+        if user.is_external:
+            raise forbid("System APIs are not available to external users")
+        if path.startswith("/v1/bus/"):
+            raise forbid("Bus endpoints are service-to-service only")
+        if path.startswith("/v1/sim/") and request.method != "GET" and not user.can_operate_orders:
+            raise forbid("The fulfilment simulator requires the Orders.Operate role")
+        if request.method not in ("GET", "HEAD", "OPTIONS") and not path.startswith("/v1/sim/") and not user.is_admin:
+            raise forbid("Writing to System APIs requires DataMart.Admin or a service identity")
+
+    app.router.dependencies.append(Depends(authorize))
+
+    # ------------------------------------------------------------------ enterprise data mart seed (illustrative)
+    mart = _json.loads(resources.files("tfso.system").joinpath("seed/mart.json").read_text())["datasets"]
+
+    @app.get("/v1/mart", tags=["data mart"], summary="Synthetic data mart datasets with row counts (illustrative)")
+    async def mart_list():
+        return {"items": [{"dataset": k, "rows": len(v), "fields": sorted({f for r in v[:50] for f in r})}
+                          for k, v in mart.items()]}
+
+    @app.get("/v1/mart/{dataset}", tags=["data mart"],
+             summary="Rows of a data mart dataset; any field=value query parameter filters (comma = IN)")
+    async def mart_rows(dataset: str, request: Request, limit: int = Query(5000, ge=1, le=50000),
+                        offset: int = Query(0, ge=0)):
+        rows = mart.get(dataset)
+        if rows is None:
+            raise ApiError(404, "Dataset not found", dataset)
+        filters = {k: set(v.split(",")) for k, v in request.query_params.items() if k not in ("limit", "offset") and v}
+        if filters:
+            rows = [r for r in rows if all(str(r.get(k)) in vals for k, vals in filters.items())]
+        return {"dataset": dataset, "total": len(rows), "items": rows[offset:offset + limit]}
     app.state.db, app.state.outbox, app.state.erp, app.state.md, app.state.broker = db, outbox, erp, md, broker
 
     def emit(events: list[dict[str, Any]]) -> None:

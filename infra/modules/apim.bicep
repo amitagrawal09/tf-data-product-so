@@ -18,10 +18,37 @@ param appInsightsId string = ''
 param appInsightsInstrumentationKey string = ''
 @description('Expose the System API (simulator + master data) through APIM. Disable for prod.')
 param exposeSystemApi bool = true
+@description('Authentication mode (docs/07 §1, docs/08): entra | dev | apikey')
+@allowed([ 'apikey', 'dev', 'entra' ])
+param authMode string = 'dev'
+@description('Entra ID workforce tenant id (entra mode)')
+param entraTenantId string = ''
+@description('Accepted audiences, comma-separated (API client id and/or api://<client-id>)')
+param entraAudience string = ''
+@description('Optional Entra External ID issuer (customers and vendors)')
+param entraExternalIssuer string = ''
 
 var isConsumption = sku == 'Consumption'
 var rateLimit = isConsumption ? '' : loadTextContent('../apim/policies/rate-limit.xml')
-var globalPolicy = replace(replace(loadTextContent('../apim/policies/global.xml'), '__CORS_ORIGIN__', consoleOrigin), '__RATE_LIMIT__', rateLimit)
+
+// ---------------------------------------------------------------- authentication policy fragments
+// Callers never supply the backend key; in entra mode dev persona headers are stripped as well.
+var authStrip = authMode == 'entra' ? '<set-header name="x-api-key" exists-action="delete" /><set-header name="x-dev-persona" exists-action="delete" />' : '<set-header name="x-api-key" exists-action="delete" />'
+var setBackendKey = loadTextContent('../apim/policies/auth/set-backend-key.xml')
+var externalIssuer = endsWith(entraExternalIssuer, '/') ? take(entraExternalIssuer, max(length(entraExternalIssuer) - 1, 0)) : entraExternalIssuer
+var workforceOpenIdUrl = 'https://login.microsoftonline.com/${entraTenantId}/v2.0/.well-known/openid-configuration'
+var openIdConfigUrls = empty(externalIssuer) ? [ workforceOpenIdUrl ] : [ workforceOpenIdUrl, '${externalIssuer}/.well-known/openid-configuration' ]
+var openIdConfigXml = join(map(openIdConfigUrls, u => '<openid-config url="${u}" />'), '')
+// An empty audience list fails closed: no token is accepted until scripts/entra-setup.sh has supplied one.
+var audienceXml = join(map(filter(split(entraAudience, ','), a => !empty(trim(a))), a => '<audience>${trim(a)}</audience>'), '')
+var jwtPolicy = replace(replace(loadTextContent('../apim/policies/auth/jwt.xml'), '__OPENID_CONFIGS__', openIdConfigXml), '__AUDIENCES__', audienceXml)
+var serviceAuthEntra = replace(replace(loadTextContent('../apim/policies/auth/service-entra.xml'), '__JWT__', jwtPolicy), '__SET_KEY__', setBackendKey)
+var serviceAuthDev = replace(loadTextContent('../apim/policies/auth/service-dev.xml'), '__SET_KEY__', setBackendKey)
+var serviceAuth = authMode == 'entra' ? serviceAuthEntra : (authMode == 'dev' ? serviceAuthDev : setBackendKey)
+var consoleAuthEntra = replace(loadTextContent('../apim/policies/auth/console-entra.xml'), '__JWT__', jwtPolicy)
+var consoleAuth = authMode == 'entra' ? consoleAuthEntra : (authMode == 'apikey' ? setBackendKey : '')
+
+var globalPolicy = replace(replace(replace(loadTextContent('../apim/policies/global.xml'), '__CORS_ORIGIN__', consoleOrigin), '__RATE_LIMIT__', rateLimit), '__AUTH_STRIP__', authStrip)
 
 resource apim 'Microsoft.ApiManagement/service@2022-08-01' = {
   name: name
@@ -137,8 +164,8 @@ resource prodSalesOrder 'Microsoft.ApiManagement/service/products@2022-08-01' = 
   parent: apim
   name: 'sales-order-data-product'
   properties: {
-    displayName: 'Sales Order Data Product'
-    description: 'Channel capture, order processing and status for trusted applications (console, partners).'
+    displayName: 'Data Mart Service Integrations'
+    description: 'Trusted server-to-server applications (D365 integrations, Databricks, partner platforms, smoke tests). Without a user token the call acts as the service principal.'
     subscriptionRequired: true
     approvalRequired: true
     subscriptionsLimit: 50
@@ -151,8 +178,9 @@ resource prodSalesOrderPolicy 'Microsoft.ApiManagement/service/products/policies
   name: 'policy'
   properties: {
     format: 'rawxml'
-    value: loadTextContent('../apim/policies/product-sales-order.xml')
+    value: replace(loadTextContent('../apim/policies/product-sales-order.xml'), '__SERVICE_AUTH__', serviceAuth)
   }
+  dependsOn: [ nvApiKey ]
 }
 
 resource prodSalesOrderApis 'Microsoft.ApiManagement/service/products/apis@2022-08-01' = [for (a, i) in apis: {
@@ -178,8 +206,9 @@ resource prodStatusPolicy 'Microsoft.ApiManagement/service/products/policies@202
   name: 'policy'
   properties: {
     format: 'rawxml'
-    value: loadTextContent('../apim/policies/product-order-status.xml')
+    value: replace(loadTextContent('../apim/policies/product-order-status.xml'), '__SERVICE_AUTH__', serviceAuth)
   }
+  dependsOn: [ nvApiKey ]
 }
 
 resource prodStatusApi 'Microsoft.ApiManagement/service/products/apis@2022-08-01' = {
@@ -188,12 +217,55 @@ resource prodStatusApi 'Microsoft.ApiManagement/service/products/apis@2022-08-01
   dependsOn: [ apiRes[1] ]
 }
 
-@description('Subscription used by the Order Operations Console (key fetched by deploy.sh via listSecrets)')
+// The browser console: user identity only (Entra token or, in non-prod, a dev persona). Never service rights.
+resource prodConsole 'Microsoft.ApiManagement/service/products@2022-08-01' = {
+  parent: apim
+  name: 'data-mart-console'
+  properties: {
+    displayName: 'Data Mart Console'
+    description: 'Taylor Farms Data Mart web console. Every call carries the signed-in user identity; access is enforced per role, domain and row scope.'
+    subscriptionRequired: true
+    approvalRequired: false
+    subscriptionsLimit: 5
+    state: 'published'
+  }
+}
+
+resource prodConsolePolicy 'Microsoft.ApiManagement/service/products/policies@2022-08-01' = {
+  parent: prodConsole
+  name: 'policy'
+  properties: {
+    format: 'rawxml'
+    value: replace(loadTextContent('../apim/policies/product-console.xml'), '__CONSOLE_AUTH__', consoleAuth)
+  }
+  dependsOn: [ nvApiKey ]
+}
+
+resource prodConsoleApis 'Microsoft.ApiManagement/service/products/apis@2022-08-01' = [for (a, i) in apis: {
+  parent: prodConsole
+  name: a.name
+  dependsOn: [ apiRes[i] ]
+}]
+
+@description('Subscription used by the Data Mart console (key fetched by deploy.sh via listSecrets; public in config.js)')
 resource consoleSub 'Microsoft.ApiManagement/service/subscriptions@2022-08-01' = {
   parent: apim
   name: 'order-console'
   properties: {
-    displayName: 'Order Operations Console'
+    displayName: 'Data Mart Console'
+    scope: prodConsole.id
+    state: 'active'
+    allowTracing: false
+  }
+  dependsOn: [ prodConsoleApis ]
+}
+
+@description('Service subscription for trusted automation (smoke test, demo data). Keep the key secret.')
+resource serviceSub 'Microsoft.ApiManagement/service/subscriptions@2022-08-01' = {
+  parent: apim
+  name: 'platform-service'
+  properties: {
+    displayName: 'Platform service (deployment automation)'
     scope: prodSalesOrder.id
     state: 'active'
     allowTracing: false
@@ -205,3 +277,4 @@ output id string = apim.id
 output name string = apim.name
 output gatewayUrl string = apim.properties.gatewayUrl
 output consoleSubscriptionName string = consoleSub.name
+output serviceSubscriptionName string = serviceSub.name

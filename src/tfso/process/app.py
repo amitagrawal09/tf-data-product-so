@@ -12,7 +12,7 @@ from datetime import date, datetime, timedelta
 from typing import Any, Literal
 
 import httpx
-from fastapi import Body, FastAPI, Header, Query, Request, Response
+from fastapi import Body, Depends, FastAPI, Header, Query, Request, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 
@@ -22,7 +22,7 @@ from ..common.db import Database
 from ..common.outbox import Outbox
 from ..common.statuses import reference_catalogue
 from ..common.util import iso, parse_dt, utcnow
-from ..common.web import ApiError, create_app
+from ..common.web import ApiError, create_app, current_user, forbid
 from . import views
 from .masterdata import MasterDataClient
 from .models import (DataAccessRequestRow, DataExportRow, InboxMessage, OutboxMessage, ProcessBase,
@@ -146,6 +146,43 @@ def create_process_app(settings: Settings | None = None) -> FastAPI:
     app.router.lifespan_context = lifespan
     app.state.svc, app.state.db, app.state.outbox, app.state.broker = svc, db, outbox, broker
 
+    # ------------------------------------------------------------------ authorisation (docs/07 §6)
+    def authorize(request: Request) -> None:
+        user = current_user(request)
+        if user.is_service:
+            return
+        path = request.url.path
+        if user.is_external:
+            raise forbid("The Order Status API is for internal users; customers use their own order views")
+        if path.startswith("/v1/bus/") or path.startswith("/v1/governance/") or path == "/v1/orders/intake" \
+                or path == "/v1/events":
+            raise forbid("This endpoint is service-to-service only")
+        if request.method in ("GET", "HEAD", "OPTIONS"):
+            if not user.can_read_orders:
+                raise forbid("Reading orders requires the Orders.Read role")
+        elif not user.can_operate_orders:
+            raise forbid("Changing orders requires the Orders.Operate role")
+
+    app.router.dependencies.append(Depends(authorize))
+
+    def scoped(request: Request, region: str | None) -> str | None:
+        """Row-level security: a user with region scope only ever sees those regions."""
+        allowed = current_user(request).regions
+        if not allowed:
+            return region
+        asked = [r.strip().upper() for r in (region or "").split(",") if r.strip()]
+        keep = [r for r in asked if r in allowed] if asked else allowed
+        return ",".join(keep) if keep else "__NO_ACCESS__"
+
+    def check_order_scope(request: Request, order_id: str) -> None:
+        allowed = current_user(request).regions
+        if not allowed:
+            return
+        with db.session() as s:
+            row = s.get(views.OrderRow, order_id)
+            if row is not None and row.region not in allowed:
+                raise ApiError(404, "Order not found", f"No order {order_id}")  # do not reveal other regions
+
     def actor_of(request: Request, explicit: str | None) -> str:
         return explicit or request.headers.get("x-user-id") or request.state.principal.get("sub", "user")
 
@@ -217,7 +254,7 @@ def create_process_app(settings: Settings | None = None) -> FastAPI:
 
     # ------------------------------------------------------------------ order status API
     @app.get("/v1/orders", tags=["order status"], summary="Search orders")
-    async def search(status: str | None = None, statusCategory: str | None = None, customerId: str | None = None,
+    async def search(request: Request, status: str | None = None, statusCategory: str | None = None, customerId: str | None = None,
                      channel: str | None = None, customerPo: str | None = None, erpSalesOrderId: str | None = None,
                      fromDate: date | None = None, toDate: date | None = None, hasExceptions: bool | None = None,
                      q: str | None = None, page: int = Query(1, ge=1), pageSize: int = Query(25, ge=1, le=200),
@@ -229,23 +266,23 @@ def create_process_app(settings: Settings | None = None) -> FastAPI:
         return views.search_orders(db, status=status, status_category=statusCategory, customer_id=customerId,
                                    channel=channel, customer_po=customerPo, erp_sales_order_id=erpSalesOrderId,
                                    from_date=fromDate, to_date=toDate, has_exceptions=hasExceptions, q=q, page=page,
-                                   page_size=pageSize, sort=sort, full=full, region=region, site=site,
+                                   page_size=pageSize, sort=sort, full=full, region=scoped(request, region), site=site,
                                    account_scope=accountScope)
 
     @app.get("/v1/orders/at-risk", tags=["order status"],
              summary="Open orders at risk of missing the customer promise (late promise, missed dates, backorder, holds, late 855)")
-    async def orders_at_risk(region: str | None = None, site: str | None = None, accountScope: str | None = None,
-                             customerId: str | None = None):
-        return views.at_risk(db, region, site, accountScope, customerId)
+    async def orders_at_risk(request: Request, region: str | None = None, site: str | None = None,
+                             accountScope: str | None = None, customerId: str | None = None):
+        return views.at_risk(db, scoped(request, region), site, accountScope, customerId)
 
     @app.get("/v1/order-events", tags=["order status"],
              summary="Lifecycle event feed across all orders (oldest first, paged)")
-    async def order_events(since: datetime | None = None, until: datetime | None = None, eventType: str | None = None,
+    async def order_events(request: Request, since: datetime | None = None, until: datetime | None = None, eventType: str | None = None,
                            orderId: str | None = None, sourceSystem: str | None = None,
                            page: int = Query(1, ge=1), pageSize: int = Query(200, ge=1, le=1000),
                            region: str | None = None, site: str | None = None, accountScope: str | None = None):
         return views.event_feed(db, since=since, until=until, event_type=eventType, order_id=orderId,
-                                source_system=sourceSystem, page=page, page_size=pageSize, region=region, site=site,
+                                source_system=sourceSystem, page=page, page_size=pageSize, region=scoped(request, region), site=site,
                                 account_scope=accountScope)
 
     @app.get("/v1/datasets/stats", tags=["governance"], summary="Live volume/freshness facts for the data catalog")
@@ -339,15 +376,17 @@ def create_process_app(settings: Settings | None = None) -> FastAPI:
             return {"items": out}
 
     @app.get("/v1/orders/by-po/{customer_po}", tags=["order status"], summary="Find orders by customer PO")
-    async def by_po(customer_po: str, customerId: str | None = None):
-        res = views.search_orders(db, customer_po=customer_po, customer_id=customerId, page_size=50)
+    async def by_po(request: Request, customer_po: str, customerId: str | None = None):
+        res = views.search_orders(db, customer_po=customer_po, customer_id=customerId, page_size=50,
+                                  region=scoped(request, None))
         if not res["items"]:
             raise ApiError(404, "Order not found", f"No order for PO {customer_po}")
         return res
 
     @app.get("/v1/orders/{order_id}", tags=["order status"], summary="Canonical sales order (CDM v1) with lifecycle history")
-    async def get_order(order_id: str, response: Response, includeHistory: bool = True,
+    async def get_order(request: Request, order_id: str, response: Response, includeHistory: bool = True,
                         if_none_match: str | None = Header(None, alias="If-None-Match")):
+        check_order_scope(request, order_id)
         doc = views.get_order(db, order_id, includeHistory)
         etag = f'"{doc["version"]}"'
         if if_none_match == etag:
@@ -356,13 +395,16 @@ def create_process_app(settings: Settings | None = None) -> FastAPI:
         return doc
 
     @app.get("/v1/orders/{order_id}/status", tags=["order status"], summary="Status view with milestones")
-    async def get_status(order_id: str, response: Response, view: Literal["internal", "customer"] = "internal"):
+    async def get_status(request: Request, order_id: str, response: Response,
+                         view: Literal["internal", "customer"] = "internal"):
+        check_order_scope(request, order_id)
         v = views.status_view(db, order_id, customer_facing=view == "customer")
         response.headers["ETag"] = f'"{v["version"]}"'
         return v
 
     @app.get("/v1/orders/{order_id}/history", tags=["order status"], summary="Ordered lifecycle history")
-    async def get_history(order_id: str, eventType: str | None = None, since: datetime | None = None):
+    async def get_history(request: Request, order_id: str, eventType: str | None = None, since: datetime | None = None):
+        check_order_scope(request, order_id)
         with db.session() as s:
             views._row(s, order_id)
             items = views.history_entries(s, order_id, event_types=eventType.split(",") if eventType else None,
@@ -370,34 +412,47 @@ def create_process_app(settings: Settings | None = None) -> FastAPI:
         return {"orderId": order_id, "items": items, "count": len(items)}
 
     @app.get("/v1/orders/{order_id}/documents", tags=["order status"], summary="Inbound and outbound documents")
-    async def get_documents(order_id: str):
+    async def get_documents(request: Request, order_id: str):
+        check_order_scope(request, order_id)
         return views.documents(db, order_id)
 
     @app.get("/v1/orders/{order_id}/documents/{document_id}", tags=["order status"])
-    async def get_document(order_id: str, document_id: str):
+    async def get_document(request: Request, order_id: str, document_id: str):
+        check_order_scope(request, order_id)
         return views.document(db, order_id, document_id)
 
     @app.get("/v1/orders/{order_id}/related", tags=["order status"], summary="Orders in the same group and links")
-    async def get_related(order_id: str):
+    async def get_related(request: Request, order_id: str):
+        check_order_scope(request, order_id)
         return views.related(db, order_id)
 
     @app.get("/v1/order-groups/{group_id}/history", tags=["order status"], summary="Merged lifecycle of a group of orders")
-    async def get_group_history(group_id: str):
-        return views.group_history(db, group_id)
+    async def get_group_history(request: Request, group_id: str):
+        res = views.group_history(db, group_id)
+        allowed = current_user(request).regions
+        if allowed:
+            keep = {o["orderId"] for o in res["orders"] if o.get("region") in allowed}
+            if not keep:
+                raise ApiError(404, "Order group not found", group_id)
+            res["orders"] = [o for o in res["orders"] if o["orderId"] in keep]
+            res["orderIds"] = [i for i in res["orderIds"] if i in keep]
+            res["history"] = [h for h in res["history"] if h.get("orderId") in keep]
+        return res
 
     @app.get("/v1/exceptions", tags=["customer service"], summary="Exception queue")
-    async def exceptions(customerId: str | None = None, code: str | None = None, region: str | None = None,
-                         site: str | None = None, accountScope: str | None = None):
-        return views.exceptions_queue(db, customerId, code, region, site, accountScope)
+    async def exceptions(request: Request, customerId: str | None = None, code: str | None = None,
+                         region: str | None = None, site: str | None = None, accountScope: str | None = None):
+        return views.exceptions_queue(db, customerId, code, scoped(request, region), site, accountScope)
 
     @app.get("/v1/status/summary", tags=["order status"])
-    async def status_summary(region: str | None = None, site: str | None = None, accountScope: str | None = None):
-        return views.summary(db, region, site, accountScope)
+    async def status_summary(request: Request, region: str | None = None, site: str | None = None,
+                             accountScope: str | None = None):
+        return views.summary(db, scoped(request, region), site, accountScope)
 
     @app.get("/v1/metrics/kpis", tags=["order status"], summary="Touchless rate, first-pass, cycle time, freshness, ROI")
-    async def metrics(laborRatePerHour: float = 32.0, region: str | None = None, site: str | None = None,
-                      accountScope: str | None = None):
-        return views.kpis(db, laborRatePerHour, region, site, accountScope)
+    async def metrics(request: Request, laborRatePerHour: float = 32.0, region: str | None = None,
+                      site: str | None = None, accountScope: str | None = None):
+        return views.kpis(db, laborRatePerHour, scoped(request, region), site, accountScope)
 
     # ------------------------------------------------------------------ customer service
     @app.patch("/v1/orders/{order_id}", tags=["customer service"], summary="Correct an order in the exception queue")

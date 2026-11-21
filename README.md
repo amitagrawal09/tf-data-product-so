@@ -21,6 +21,8 @@ This repository implements the Sales Order data product described in the *Taylor
 | – | One-click Azure deployment guide | [`docs/06-azure-one-click-deployment.md`](docs/06-azure-one-click-deployment.md), [`infra/oneclick.bicep`](infra/oneclick.bicep), [`.github/workflows/deploy-azure.yml`](.github/workflows/deploy-azure.yml) |
 | – | Product strategy (CPO view): north star, regional operating model, roadmap | [`docs/05-product-strategy.md`](docs/05-product-strategy.md) |
 | – | Binding solution blueprint (contracts, routes, env vars) | [`docs/00-solution-blueprint.md`](docs/00-solution-blueprint.md) |
+| – | Enterprise Data Mart access contract (roles, personas, domains, API) | [`docs/07-data-mart-access-contract.md`](docs/07-data-mart-access-contract.md) |
+| – | Single sign-on (Entra ID, External ID, B2B) and access control guide | [`docs/08-sso-and-access-control.md`](docs/08-sso-and-access-control.md), [`scripts/entra-setup.sh`](scripts/entra-setup.sh) |
 
 ## Deploy to Azure (one click)
 
@@ -89,6 +91,26 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 Interactive API docs (OpenAPI): http://localhost:8002/docs (Process / Order Status API), `:8001/docs` (Experience) and `:8003/docs` (System).
 
 ## Try it in the console
+
+**Sign in.** Locally the console runs in **dev** mode: open http://localhost:8080 and pick a test persona on the sign-in page. Each persona has different roles and data scope, so you can see access control at work:
+
+| Persona | Sees |
+|---|---|
+| Avery Admin (`admin`) | Everything, including **Access & roles** |
+| Sam Analyst (`sales.analyst`) | Sales Order, Customer, Product and Logistics domains; can export; personal data masked |
+| Casey Service (`cs.agent`) | Order operations; personal data visible |
+| Morgan West (`regional.gm.west`) | West region rows only |
+| Pat Buyer (`procurement.buyer`) | Procurement, Vendor and Product domains |
+| Frankie Finance (`finance.controller`) | Finance and related domains; approves access requests |
+| Pat Rivera, FreshMart (`ext.customer.freshmart`) | External customer portal: FreshMart's own orders, shipments and invoices |
+| Jordan Greens, Salinas Valley Greens (`ext.vendor.salinas`) | External vendor portal: own purchase orders, receipts and AP invoices |
+
+In Azure, production signs in with **Microsoft Entra ID**:
+
+- employees through the Taylor Farms tenant;
+- customers and vendors through Entra External ID or as B2B guests.
+
+Run `scripts/entra-setup.sh` once, then deploy. See [docs/08](docs/08-sso-and-access-control.md) for the setup and [docs/07](docs/07-data-mart-access-contract.md) for the roles and rules.
 
 **Regional and national operations.** Use the **Scope** selector in the top bar to choose National (all regions), a region (West, Southwest, Central, Southeast, Northeast) or a single processing site, and **Accounts** to choose national or regional accounts. The dashboard, orders, exceptions, orders at risk and marketplace all follow that scope.
 

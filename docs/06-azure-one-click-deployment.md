@@ -152,6 +152,28 @@ If you move the solution to another branch or repository, update the button URL 
   - `id-<prefix>-<env>-deployer`: the deployer identity, with Owner on the resource group.
   - `ds-<prefix>-<env>-deploy`: the deployment script. Its logs are under **Resource group → ds-…-deploy → Logs**. The container is cleaned up on success and kept for one day (P1D) on failure.
 
+## Enable SSO (Microsoft Entra ID)
+
+Production always runs with Entra ID single sign-on. Dev and test use test personas until you enable it. The full guide is [docs/08-sso-and-access-control.md](08-sso-and-access-control.md).
+
+1. Register the API and console apps. Run this once per environment, in Cloud Shell, as an administrator:
+
+   ```bash
+   scripts/entra-setup.sh --env prod --console-url https://<console-url>/ --create-groups
+   ```
+
+   This writes `.deploy/prod.entra.env`, which holds identifiers only.
+
+2. Assign users or the `DM-*` groups to app roles. Go to **Enterprise applications → Taylor Farms Data Mart API → Users and groups**.
+
+3. Deploy:
+   - **Locally:** run `./deploy.sh azure --env prod`. It picks up the env file automatically.
+   - **GitHub Actions (option A):** copy the values into the GitHub environment variables `TFSO_ENTRA_TENANT_ID`, `TFSO_ENTRA_API_CLIENT_ID` and `TFSO_ENTRA_SPA_CLIENT_ID`. Optionally also set `TFSO_ENTRA_AUDIENCE` and `TFSO_ENTRA_EXTERNAL_ISSUER`.
+
+   - **Portal (options B and C):** fill in the **Entra Tenant Id**, **Entra Api Client Id** and **Entra Spa Client Id** parameters (optionally the External ID issuer and authority) on the deployment form.
+
+A prod deployment without these settings stops with *"Production requires Entra ID single sign-on"*. Because the console's redirect URI is only known after the first deployment, run `scripts/entra-setup.sh` again with the final `--console-url` once the console URL is printed.
+
 ## Troubleshooting
 
 | Symptom | Cause / fix |
@@ -161,7 +183,9 @@ If you move the solution to another branch or repository, update the button URL 
 | `AuthorizationFailed ... roleAssignments/write` | The deploying user or identity needs Owner, or User Access Administrator, at the target scope |
 | Bicep step fails on the first attempt and then succeeds | RBAC propagation for Key Vault references and AcrPull; `deploy.sh` retries three times automatically |
 | APIM name already in use or soft-deleted | Choose another `prefix`, or purge it with `az apim deletedservice purge` |
-| Smoke test fails right after deployment | Container Apps may still be scaling from zero. Re-run with `./deploy.sh smoke <apim-url>` and the subscription key |
+| `Production requires Entra ID single sign-on` | Run `scripts/entra-setup.sh` (see *Enable SSO* above) |
+| Console sign-in fails with `AADSTS50011` | The console URL is not a registered SPA redirect URI. Re-run `scripts/entra-setup.sh --console-url <url>` |
+| Smoke test fails right after deployment | Container Apps may still be scaling from zero. Re-run with `./deploy.sh smoke <apim-url>` and the `platform-service` subscription key |
 
 ## Tear down
 

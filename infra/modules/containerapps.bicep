@@ -24,6 +24,15 @@ param d365TenantId string
 param d365ClientId string
 param d365Company string
 param isaSenderId string
+@description('Backend authentication mode (contract docs/07 §1): apikey | dev | entra')
+@allowed([ 'apikey', 'dev', 'entra' ])
+param authMode string
+@description('Entra ID workforce tenant id (entra mode)')
+param entraTenantId string = ''
+@description('Accepted token audience(s): API client id and/or api://<client-id>, comma-separated')
+param entraAudience string = ''
+@description('Optional Entra External ID issuer for customers and vendors')
+param entraExternalIssuer string = ''
 
 var isProd = environment == 'prod'
 var placeholderImage = 'mcr.microsoft.com/k8se/quickstart:latest'
@@ -84,8 +93,11 @@ var commonEnv = [
   { name: 'TFSO_PROCESS_URL', value: 'http://${names.process}' }
   { name: 'TFSO_SYSTEM_URL', value: 'http://${names.system}' }
   { name: 'TFSO_EXPERIENCE_URL', value: 'http://${names.experience}' }
-  { name: 'TFSO_AUTH_MODE', value: 'apikey' }
+  { name: 'TFSO_AUTH_MODE', value: authMode }
   { name: 'TFSO_API_KEYS', secretRef: 'api-key' }
+  { name: 'TFSO_ENTRA_TENANT_ID', value: entraTenantId }
+  { name: 'TFSO_ENTRA_AUDIENCE', value: entraAudience }
+  { name: 'TFSO_ENTRA_EXTERNAL_ISSUER', value: entraExternalIssuer }
   { name: 'APPLICATIONINSIGHTS_CONNECTION_STRING', secretRef: 'appi-conn' }
   { name: 'TFSO_D365_MODE', value: empty(d365Url) ? 'simulator' : 'live' }
   { name: 'TFSO_D365_URL', value: d365Url }
@@ -170,8 +182,9 @@ resource containerApps 'Microsoft.App/containerApps@2024-03-01' = [for a in apps
     configuration: {
       activeRevisionsMode: 'Single'
       // Ingress is external so APIM (outside the environment) can reach it. Direct calls that bypass
-      // APIM are rejected by the services because APIM injects the x-api-key from Key Vault and the
-      // apps run with TFSO_AUTH_MODE=apikey. Harden further with VNet + internal ingress for prod.
+      // APIM still need an identity the services accept: an Entra access token (entra mode), the backend
+      // x-api-key held only by APIM/Key Vault (service traffic), or - in non-prod dev mode only - a
+      // persona header. Harden further with VNet + internal ingress for prod (docs/04, docs/08).
       ingress: {
         external: true
         targetPort: targetPort

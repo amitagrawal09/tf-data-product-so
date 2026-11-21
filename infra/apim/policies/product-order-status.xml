@@ -1,6 +1,7 @@
 <!--
   "Order Status API" product: read-only access to the Process API.
   Consumers (customer service tools, Databricks, partners) get GET operations only.
+  The SERVICE_AUTH token (replaced by Bicep) gives integrations without a user token the service identity.
 -->
 <policies>
   <inbound>
@@ -17,6 +18,7 @@
       </when>
     </choose>
     <quota calls="100000" renewal-period="86400" />
+    __SERVICE_AUTH__
   </inbound>
   <backend>
     <base />

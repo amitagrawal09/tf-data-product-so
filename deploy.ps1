@@ -182,7 +182,7 @@ function Start-Local {
   $gw = ($Services | Where-Object { $_.Name -eq "gateway" }).Port
   Step "Starting services (SQLite + local HTTP bus)"
   $common = @{
-    TFSO_ENV = "local"; TFSO_BUS_MODE = "http"; TFSO_AUTH_MODE = "apikey"; TFSO_API_KEYS = $ApiKey
+    TFSO_ENV = "local"; TFSO_BUS_MODE = "http"; TFSO_AUTH_MODE = "dev"; TFSO_API_KEYS = $ApiKey
     TFSO_PROCESS_URL = "http://localhost:8002"; TFSO_SYSTEM_URL = "http://localhost:8003"
     TFSO_EXPERIENCE_URL = "http://localhost:8001"; TFSO_D365_MODE = "simulator"; TFSO_LAKEHOUSE_MODE = "file"
     TFSO_FRONTEND_DIR = (Join-Path $Root "frontend"); PYTHONUNBUFFERED = "1"; PYTHONIOENCODING = "utf-8"

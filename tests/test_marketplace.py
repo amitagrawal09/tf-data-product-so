@@ -31,7 +31,8 @@ async def test_catalog_lists_every_dataset_with_live_facts(h):
     assert by["order-lifecycle-events"]["recordCount"] >= 15
     assert by["items"]["recordCount"] == 9 and by["sales-orders"]["freshnessStatus"] == "ON_TIME"
     assert any(c.startswith("GET /process/v1/datasets/stats") for c in res["fulfilledBy"])
-    assert [d["id"] for d in (await h.exp.get("/marketplace/v1/datasets", params={"q": "traceability"})).json()["items"]] == ["shipments"]
+    found = [d["id"] for d in (await h.exp.get("/marketplace/v1/datasets", params={"q": "traceability"})).json()["items"]]
+    assert found[0] == "shipments" and "goods-receipts" in found
     assert all(d["domain"] == "Customer" for d in (await h.exp.get("/marketplace/v1/datasets", params={"domain": "Customer"})).json()["items"])
 
 

@@ -1,0 +1,4 @@
+<validate-jwt header-name="Authorization" failed-validation-httpcode="401" failed-validation-error-message="Sign-in required: send a valid Entra ID access token for the Taylor Farms Data Mart API." require-scheme="Bearer" require-expiration-time="true" require-signed-tokens="true">
+  __OPENID_CONFIGS__
+  <audiences>__AUDIENCES__</audiences>
+</validate-jwt>

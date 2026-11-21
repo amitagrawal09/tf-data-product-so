@@ -1,7 +1,8 @@
 """Local stand-in for Azure API Management + static host for the Order Operations Console.
 
 Routes mirror the APIM APIs: /api/exp/* → Experience, /api/process/* → Process, /api/system/* → System.
-Like the APIM policy it stamps x-correlation-id and injects the backend x-api-key.
+Like the APIM policy it stamps x-correlation-id. It injects the backend x-api-key only in legacy apikey mode;
+with SSO (dev personas / Entra ID) the user's identity headers are forwarded instead.
 """
 from __future__ import annotations
 
@@ -48,7 +49,11 @@ def create_gateway_app() -> FastAPI:
                                 media_type="application/problem+json")
         headers = {k: v for k, v in request.headers.items() if k.lower() not in HOP_BY_HOP}
         headers.setdefault("x-correlation-id", str(uuid.uuid4()))
-        if settings.api_keys and "x-api-key" not in {k.lower() for k in headers}:
+        lower = {k.lower() for k in headers}
+        has_identity = "authorization" in lower or "x-dev-persona" in lower
+        # Like APIM: inject the backend key only in legacy apikey mode and never for signed-in users,
+        # otherwise every user request would run with service-level rights.
+        if settings.auth_mode == "apikey" and not has_identity and settings.api_keys and "x-api-key" not in lower:
             headers["x-api-key"] = settings.api_keys[0]
         try:
             resp = await client.request(request.method, f"{base}/{path}", params=request.query_params,

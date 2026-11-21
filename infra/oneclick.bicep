@@ -62,6 +62,22 @@ param d365ClientId string = ''
 param d365ClientSecret string = ''
 param d365Company string = 'usmf'
 
+// ---------------------------------------------------------------- single sign-on (docs/08)
+@description('Entra ID tenant id for single sign-on. Leave the Entra values empty for dev personas (non-prod only); prod requires them - run scripts/entra-setup.sh first.')
+param entraTenantId string = ''
+
+@description('Client id of the "Taylor Farms Data Mart API" app registration (from scripts/entra-setup.sh)')
+param entraApiClientId string = ''
+
+@description('Client id of the "Taylor Farms Data Mart Console" SPA app registration (from scripts/entra-setup.sh)')
+param entraSpaClientId string = ''
+
+@description('Optional Entra External ID issuer for customer and vendor sign-in')
+param entraExternalIssuer string = ''
+
+@description('Optional Entra External ID authority for the console, https://<tenant>.ciamlogin.com/<tenant-id>')
+param entraExternalAuthority string = ''
+
 @description('Changes on every deployment so the deployment script re-runs (leave the default)')
 param forceUpdateTag string = utcNow()
 
@@ -160,6 +176,11 @@ module deployer 'oneclick/deployer.bicep' = {
     d365ClientId: d365ClientId
     d365ClientSecret: d365ClientSecret
     d365Company: d365Company
+    entraTenantId: entraTenantId
+    entraApiClientId: entraApiClientId
+    entraSpaClientId: entraSpaClientId
+    entraExternalIssuer: entraExternalIssuer
+    entraExternalAuthority: entraExternalAuthority
     forceUpdateTag: forceUpdateTag
   }
 }

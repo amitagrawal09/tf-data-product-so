@@ -1,0 +1,7 @@
+<!-- Console product in entra mode: every call except health checks needs a valid Entra ID access token.
+     The backend key is never injected for console traffic (its subscription key is public in config.js). -->
+<choose>
+  <when condition="@(!context.Request.Url.Path.EndsWith(&quot;/health&quot;))">
+    __JWT__
+  </when>
+</choose>

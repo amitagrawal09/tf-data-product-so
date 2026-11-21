@@ -12,13 +12,14 @@ import uuid
 from datetime import date
 from typing import Any, Literal
 
-from fastapi import Body, FastAPI, Header, Query, Request
+from fastapi import Body, Depends, FastAPI, Header, Query, Request
 from pydantic import BaseModel, Field
 
 from ..common import x12
 from ..common.config import Settings, get_settings
 from ..common.util import group_id as new_group_id, iso, utcnow
-from ..common.web import ApiError, ServiceClient, create_app
+from ..common.identity import DOMAINS, PERSONAS, ROLES
+from ..common.web import ApiError, ServiceClient, create_app, current_user, forbid
 from .extract import extract_email
 from .marketplace import build_router
 
@@ -76,15 +77,75 @@ def create_experience_app(settings: Settings | None = None) -> FastAPI:
                      "Each channel has its own experience API over the shared Order Intake and Order Status process APIs.")
     process = ServiceClient(settings.process_url, settings)
     system = ServiceClient(settings.system_url, settings)
+
+    # ------------------------------------------------------------------ authorisation (docs/07 §6)
+    def authorize(request: Request) -> None:
+        user = current_user(request)
+        if user.is_service:
+            return
+        path, method = request.url.path, request.method
+        if path.startswith(("/auth/v1/", "/marketplace/v1/")):
+            return  # every signed-in user; datasets are authorised individually
+        if path.startswith("/admin/v1/"):
+            if not user.is_steward:
+                raise forbid("Access administration requires DataMart.Admin or DataMart.Steward")
+            return
+        if path.startswith("/portal/v1/"):
+            if user.is_external_customer:
+                return  # row-level checks in each route
+            if user.is_external:
+                raise forbid("The customer portal is for customers")
+            if method == "POST" and not user.can_operate_orders:
+                raise forbid("Entering orders requires the Orders.Operate role")
+            if method == "GET" and not (user.can_read_orders or user.can_operate_orders):
+                raise forbid("Viewing orders requires the Orders.Read role")
+            return
+        # channel APIs (partner, EDI, e-mail): integration identities, or internal order operators
+        if user.is_external or (method != "GET" and not user.can_operate_orders) or \
+                (method == "GET" and not user.can_read_orders):
+            raise forbid("Channel APIs are for integration partners and order operators")
+
+    app.router.dependencies.append(Depends(authorize))
     app.include_router(build_router(process, system))
 
-    def principal_customer(request: Request) -> str | None:
-        return (getattr(request.state, "principal", {}) or {}).get("extension_customerId")
-
     def enforce_customer(request: Request, customer_id: str | None) -> None:
-        bound = principal_customer(request)
-        if bound and customer_id and bound != customer_id:
-            raise ApiError(403, "Forbidden", "You can only access your own orders")
+        """Row-level security for external customers: only their own customer accounts."""
+        user = current_user(request)
+        if user.is_external_customer and (not customer_id or customer_id not in user.customer_ids):
+            raise forbid("You can only access your own orders")
+
+    # ------------------------------------------------------------------ identity
+    @app.get("/auth/v1/me", tags=["identity"], summary="The signed-in principal: roles, domains and row scope")
+    async def me(request: Request):
+        from .catalog import DATASETS
+        user = current_user(request)
+        ext = []
+        if user.is_external_customer:
+            ext += [d["domainId"] for d in DATASETS if "external-customer" in d["audiences"]]
+        if user.is_external_vendor:
+            ext += [d["domainId"] for d in DATASETS if "external-vendor" in d["audiences"]]
+        return user.to_dict(external_domains=sorted(set(ext)))
+
+    @app.get("/auth/v1/personas", tags=["identity"], summary="Development sign-in personas (dev mode only)")
+    async def personas():
+        if settings.auth_mode != "dev":
+            raise ApiError(404, "Not Found", "Personas are only available in development sign-in mode")
+        return {"items": PERSONAS}
+
+    @app.get("/admin/v1/roles", tags=["administration"], summary="App role catalogue")
+    async def roles():
+        return {"items": ROLES}
+
+    @app.get("/admin/v1/role-matrix", tags=["administration"], summary="Which roles read which domains")
+    async def role_matrix():
+        matrix = []
+        for r in ROLES:
+            row = {"role": r["role"], "kind": r["kind"], "domains": {}}
+            for d in DOMAINS:
+                row["domains"][d["domainId"]] = (r["role"] in ("DataMart.Admin", d["role"]))
+            matrix.append(row)
+        return {"domains": [{"domainId": d["domainId"], "name": d["name"]} for d in DOMAINS], "roles": matrix,
+                "personas": PERSONAS if settings.auth_mode == "dev" else []}
 
     async def intake(body: dict[str, Any], idem: str | None) -> dict[str, Any]:
         headers = {"Idempotency-Key": idem} if idem else None
@@ -105,8 +166,11 @@ def create_experience_app(settings: Settings | None = None) -> FastAPI:
 
     # ------------------------------------------------------------------ catalog (portal pickers)
     @app.get("/portal/v1/catalog/customers", tags=["portal"])
-    async def catalog_customers():
+    async def catalog_customers(request: Request):
         items = (await system.get_json("/v1/masterdata/customers"))["items"]
+        user = current_user(request)
+        if user.is_external_customer:
+            items = [c for c in items if c["customerId"] in user.customer_ids]
         return {"items": [{k: c.get(k) for k in ("customerId", "name", "active", "segment", "channels", "currency",
                                                  "accountScope", "regions", "homeRegion")}
                           for c in items]}
@@ -128,6 +192,9 @@ def create_experience_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/portal/v1/catalog/items", tags=["portal"])
     async def catalog_items(request: Request, customerId: str | None = None):
+        user = current_user(request)
+        if user.is_external_customer and not customerId and user.customer_ids:
+            customerId = user.customer_ids[0]
         enforce_customer(request, customerId)
         items = (await system.get_json("/v1/masterdata/items", {"active": "true"}))["items"]
         prices = {}
@@ -165,7 +232,7 @@ def create_experience_app(settings: Settings | None = None) -> FastAPI:
             draft["notes"] = [{"type": "CUSTOMER", "text": req.notes}]
         if req.contact:
             draft["soldTo"] = {"partyId": req.customerId, "contacts": [{"role": "OC", **req.contact.model_dump(exclude_none=True)}]}
-        actor_id = req.enteredBy or request.state.principal.get("sub", "portal-user")
+        actor_id = req.enteredBy or current_user(request).email or current_user(request).id
         body = {"sourceChannel": req.channel,
                 "channelDetail": "customer-service-console" if req.channel == "MANUAL" else "customer-portal",
                 "receivedAt": iso(utcnow()),
@@ -181,6 +248,23 @@ def create_experience_app(settings: Settings | None = None) -> FastAPI:
         view = await process.get_json(f"/v1/orders/{order_id}/status", {"view": "customer"})
         enforce_customer(request, view.get("customerId"))
         return view
+
+    @app.get("/portal/v1/my/orders", tags=["portal"], summary="My orders: the signed-in customer's own orders")
+    async def my_orders(request: Request, status: str | None = None, q: str | None = None, page: int = 1,
+                        pageSize: int = Query(25, ge=1, le=200)):
+        user = current_user(request)
+        params = {"statusCategory": status, "q": q, "page": page, "pageSize": pageSize}
+        if user.is_external_customer:
+            if not user.customer_ids:
+                return {"items": [], "total": 0, "page": page, "pageSize": pageSize}
+            params["customerId"] = user.customer_ids[0]  # External ID accounts are bound to one customer
+        res = await process.get_json("/v1/orders", {k: v for k, v in params.items() if v is not None})
+        if user.is_external_customer:  # defence in depth
+            res["items"] = [i for i in res["items"] if i.get("customerId") in user.customer_ids]
+            for i in res["items"]:
+                for k in ("touchless", "openExceptionCount", "crossRegion", "accountScope"):
+                    i.pop(k, None)
+        return res
 
     @app.get("/portal/v1/customers/{customer_id}/orders", tags=["portal"])
     async def portal_orders(customer_id: str, request: Request, status: str | None = None, page: int = 1,

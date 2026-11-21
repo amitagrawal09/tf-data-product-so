@@ -1,0 +1,23 @@
+<!--
+  "Data Mart Console" product: the browser single-page app. Its subscription key is published in config.js,
+  so this product NEVER grants service rights. Identity comes from the user:
+    entra : Entra ID access token, validated here (validate-jwt) and again by the services
+    dev   : x-dev-persona header (non-prod only; the services refuse dev mode when TFSO_ENV=prod)
+    apikey: legacy - backend key injected (do not use beyond local demos)
+  The CONSOLE_AUTH token below is replaced by Bicep (infra/modules/apim.bicep).
+-->
+<policies>
+  <inbound>
+    <base />
+    __CONSOLE_AUTH__
+  </inbound>
+  <backend>
+    <base />
+  </backend>
+  <outbound>
+    <base />
+  </outbound>
+  <on-error>
+    <base />
+  </on-error>
+</policies>

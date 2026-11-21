@@ -16,6 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from .config import Settings
+from .identity import Principal
 
 correlation_id_var: contextvars.ContextVar[str] = contextvars.ContextVar("correlation_id", default="")
 PUBLIC_PATHS = ("/health", "/docs", "/redoc", "/openapi.json")
@@ -76,41 +77,92 @@ def configure_telemetry(settings: Settings) -> None:
 
 # ------------------------------------------------------------------------------------------- auth
 class Authenticator:
+    """Resolves every request to one Principal (docs/07 §1). A user identity always wins over the service key."""
+
+    PUBLIC_DEV_PATHS = ("/auth/v1/personas",)
+
     def __init__(self, settings: Settings):
         self.settings = settings
-        self._jwks = None
+        self._jwks: dict[str, Any] = {}
+        if settings.auth_mode == "dev" and settings.is_prod:
+            raise RuntimeError("TFSO_AUTH_MODE=dev is not allowed when TFSO_ENV=prod - configure Entra ID (entra)")
 
-    def check(self, request: Request) -> dict[str, Any]:
+    def resolve(self, request: Request) -> Principal:
+        from .identity import SERVICE, from_persona
         mode = self.settings.auth_mode
         if mode == "none":
-            return {"sub": "anonymous", "mode": "none"}
-        if mode == "apikey":
-            key = request.headers.get("x-api-key")
-            if key and key in self.settings.api_keys:
-                return {"sub": f"apikey:{key[:4]}***", "mode": "apikey"}
-            raise ApiError(401, "Unauthorized", "Missing or invalid x-api-key header")
-        if mode == "entra":
-            # APIM forwards the backend key in x-api-key for service-to-service calls behind the gateway.
-            key = request.headers.get("x-api-key")
-            if key and key in self.settings.api_keys:
-                return {"sub": "apim", "mode": "apikey"}
-            auth = request.headers.get("authorization", "")
-            if not auth.lower().startswith("bearer "):
-                raise ApiError(401, "Unauthorized", "Bearer token required")
+            return SERVICE
+        auth = request.headers.get("authorization", "")
+        persona = request.headers.get("x-dev-persona")
+        if mode == "entra" and auth.lower().startswith("bearer "):
             return self._validate_jwt(auth.split(" ", 1)[1])
-        raise ApiError(500, "Misconfigured auth", f"Unknown TFSO_AUTH_MODE {mode}")
+        if mode == "dev" and persona:
+            p = from_persona(persona.strip())
+            if p is None:
+                raise ApiError(401, "Unauthorized", f"Unknown dev persona '{persona}'")
+            return p
+        key = request.headers.get("x-api-key")
+        if key and key in self.settings.api_keys:
+            return SERVICE
+        if mode == "dev" and request.url.path.endswith(self.PUBLIC_DEV_PATHS):
+            return SERVICE  # persona list for the sign-in page
+        detail = {"apikey": "Missing or invalid x-api-key header",
+                  "dev": "Sign in: send x-dev-persona (dev) or x-api-key (service)",
+                  "entra": "Sign in with Microsoft Entra ID: Bearer token required"}.get(mode, "Unauthorized")
+        if mode not in ("apikey", "dev", "entra"):
+            raise ApiError(500, "Misconfigured auth", f"Unknown TFSO_AUTH_MODE {mode}")
+        raise ApiError(401, "Unauthorized", detail)
 
-    def _validate_jwt(self, token: str) -> dict[str, Any]:
+    def check(self, request: Request) -> dict[str, Any]:
+        """Backward-compatible: sets request.state.user and returns the legacy principal dict."""
+        user = self.resolve(request)
+        request.state.user = user
+        return user.legacy()
+
+    def _jwks_client(self, url: str):
         import jwt
-        tenant = self.settings.entra_tenant_id
-        if self._jwks is None:
-            self._jwks = jwt.PyJWKClient(f"https://login.microsoftonline.com/{tenant}/discovery/v2.0/keys")
+        if url not in self._jwks:
+            self._jwks[url] = jwt.PyJWKClient(url)
+        return self._jwks[url]
+
+    def _validate_jwt(self, token: str) -> Principal:
+        import json as _json
+
+        import jwt
+        from .identity import from_claims
+        s = self.settings
         try:
-            key = self._jwks.get_signing_key_from_jwt(token).key
-            return jwt.decode(token, key, algorithms=["RS256"], audience=self.settings.entra_audience,
-                              issuer=f"https://login.microsoftonline.com/{tenant}/v2.0")
+            unverified = jwt.decode(token, options={"verify_signature": False})
+        except Exception as exc:  # noqa: BLE001
+            raise ApiError(401, "Unauthorized", f"Malformed token: {exc}") from exc
+        iss = unverified.get("iss", "")
+        workforce = f"https://login.microsoftonline.com/{s.entra_tenant_id}/v2.0"
+        if iss == workforce:
+            jwks = f"https://login.microsoftonline.com/{s.entra_tenant_id}/discovery/v2.0/keys"
+        elif s.entra_external_issuer and iss == s.entra_external_issuer:
+            jwks = s.entra_external_jwks or iss.replace("/v2.0", "/discovery/v2.0/keys")
+        else:
+            raise ApiError(401, "Unauthorized", f"Untrusted token issuer {iss}")
+        # Comma-separated: workforce API and (optionally) the External ID API; v2 tokens carry the bare GUID.
+        listed = [a.strip() for a in (s.entra_audience or "").split(",") if a.strip()]
+        audiences = sorted({x for a in listed for x in (a, a.replace("api://", ""))})
+        try:
+            key = self._jwks_client(jwks).get_signing_key_from_jwt(token).key
+            claims = jwt.decode(token, key, algorithms=["RS256"], audience=audiences, issuer=iss)
         except Exception as exc:  # noqa: BLE001
             raise ApiError(401, "Unauthorized", f"Invalid token: {exc}") from exc
+        group_map = _json.loads(s.group_role_map) if s.group_role_map else None
+        return from_claims(claims, external_issuer=s.entra_external_issuer, customer_claim=s.claim_customer,
+                           vendor_claim=s.claim_vendor, regions_claim=s.claim_regions, group_role_map=group_map)
+
+
+def current_user(request: Request) -> Principal:
+    from .identity import SERVICE
+    return getattr(request.state, "user", None) or SERVICE
+
+
+def forbid(detail: str) -> ApiError:
+    return ApiError(403, "Forbidden", detail)
 
 
 def create_app(settings: Settings, title: str, description: str, version: str = "1.0.0") -> FastAPI:
@@ -124,7 +176,7 @@ def create_app(settings: Settings, title: str, description: str, version: str = 
     log = logging.getLogger(f"tfso.{settings.service}")
 
     app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"],
-                       expose_headers=["x-correlation-id", "etag", "location"])
+                       expose_headers=["x-correlation-id", "etag", "location", "content-disposition", "x-tfso-row-count", "x-tfso-export-id", "x-tfso-fulfilled-by"])
 
     @app.middleware("http")
     async def _context(request: Request, call_next):

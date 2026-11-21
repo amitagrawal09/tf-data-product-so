@@ -35,7 +35,7 @@ class Harness:
 
         def s(service, **kw):
             base = get_settings(service)
-            return dataclasses.replace(base, bus_mode="inproc", auth_mode="apikey", api_keys=("test-key",),
+            return dataclasses.replace(base, bus_mode="inproc", auth_mode="dev", api_keys=("test-key",),
                                        process_url=PROCESS_URL, system_url=SYSTEM_URL, eventhub_fqdn=None,
                                        d365_mode="simulator", lakehouse_mode="file", env="test",
                                        lakehouse_local_path=str(tmp_path / "lake"),

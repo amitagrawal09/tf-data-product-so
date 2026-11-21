@@ -36,6 +36,12 @@ class Settings:
     api_keys: tuple[str, ...]
     entra_tenant_id: str | None
     entra_audience: str | None
+    entra_external_issuer: str | None
+    entra_external_jwks: str | None
+    claim_customer: str
+    claim_vendor: str
+    claim_regions: str
+    group_role_map: str | None
     d365_mode: str
     d365_url: str | None
     d365_tenant_id: str | None
@@ -93,6 +99,12 @@ def get_settings(service: str = "app") -> Settings:
         api_keys=tuple(k.strip() for k in _env("TFSO_API_KEYS", "local-dev-key").split(",") if k.strip()),
         entra_tenant_id=_env("TFSO_ENTRA_TENANT_ID"),
         entra_audience=_env("TFSO_ENTRA_AUDIENCE"),
+        entra_external_issuer=_env("TFSO_ENTRA_EXTERNAL_ISSUER"),
+        entra_external_jwks=_env("TFSO_ENTRA_EXTERNAL_JWKS"),
+        claim_customer=_env("TFSO_CLAIM_CUSTOMER", "extension_customerId"),
+        claim_vendor=_env("TFSO_CLAIM_VENDOR", "extension_vendorId"),
+        claim_regions=_env("TFSO_CLAIM_REGIONS", "extension_regions"),
+        group_role_map=_env("TFSO_GROUP_ROLE_MAP"),
         d365_mode=_env("TFSO_D365_MODE", "simulator"),
         d365_url=_env("TFSO_D365_URL"),
         d365_tenant_id=_env("TFSO_D365_TENANT_ID"),

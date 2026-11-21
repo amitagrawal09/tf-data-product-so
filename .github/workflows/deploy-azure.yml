@@ -78,6 +78,16 @@ jobs:
       D365_TENANT_ID: ${{ vars.D365_TENANT_ID }}
       D365_CLIENT_ID: ${{ vars.D365_CLIENT_ID }}
       D365_CLIENT_SECRET: ${{ secrets.D365_CLIENT_SECRET }}
+      # Entra ID single sign-on (docs/08). Copy the values from .deploy/<env>.entra.env (written by
+      # scripts/entra-setup.sh) into GitHub environment variables. Required for prod; without them
+      # dev/test deploy with test personas.
+      AUTH_MODE: ${{ vars.AUTH_MODE }}
+      TFSO_ENTRA_TENANT_ID: ${{ vars.TFSO_ENTRA_TENANT_ID }}
+      TFSO_ENTRA_API_CLIENT_ID: ${{ vars.TFSO_ENTRA_API_CLIENT_ID }}
+      TFSO_ENTRA_AUDIENCE: ${{ vars.TFSO_ENTRA_AUDIENCE }}
+      TFSO_ENTRA_SPA_CLIENT_ID: ${{ vars.TFSO_ENTRA_SPA_CLIENT_ID }}
+      TFSO_ENTRA_EXTERNAL_ISSUER: ${{ vars.TFSO_ENTRA_EXTERNAL_ISSUER }}
+      TFSO_ENTRA_EXTERNAL_AUTHORITY: ${{ vars.TFSO_ENTRA_EXTERNAL_AUTHORITY }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

@@ -560,5 +560,220 @@ DATASETS += [
     },
 ]
 
+
+# ======================================================================================= enterprise data mart
+# The Sales Order data product is one producer in the Taylor Farms enterprise data mart. The other domains are
+# published from the lakehouse gold layer through the System API (`/v1/mart/{dataset}`). In this repository their
+# rows are ILLUSTRATIVE synthetic data (src/tfso/system/seed/mart.json) - the contract, not the numbers, is real.
+VENDOR_OWNER = {"name": "Vendor management owner", "team": "Procurement & Supplier Quality", "email": "vendor-data@taylorfarms.example"}
+PROC_OWNER = {"name": "Procurement data owner", "team": "Procurement", "email": "procurement-data@taylorfarms.example"}
+FIN_OWNER = {"name": "Finance data owner", "team": "Finance & Accounting", "email": "finance-data@taylorfarms.example"}
+LOG_OWNER = {"name": "Logistics data owner", "team": "Transportation", "email": "logistics-data@taylorfarms.example"}
+FIN_STEWARD = {"name": "Finance data steward", "team": "Financial Controls", "email": "fin-steward@taylorfarms.example"}
+
+
+def _mart_lineage(dataset_label: str, entity: str, gold_table: str) -> dict[str, Any]:
+    ds = {"id": "dataset", "label": dataset_label, "kind": "dataset", "stage": 4, "detail": "This dataset"}
+    nodes = [{**D365, "detail": f"{entity} (OData / export to Data Lake)"},
+             {"id": "bronze", "label": "Lakehouse bronze", "kind": "store", "stage": 1, "detail": "ADLS Gen2 raw extracts"},
+             {"id": "silver", "label": "Lakehouse silver", "kind": "integration", "stage": 2, "detail": "Conformed, de-duplicated (DLT)"},
+             {"id": "gold", "label": "Gold mart", "kind": "store", "stage": 3, "detail": gold_table},
+             ds,
+             {"id": "pbi", "label": "Power BI / Delta Sharing", "kind": "consumer", "stage": 5, "detail": "Analytics & partners"},
+             {"id": "portal", "label": "Data mart portal & APIs", "kind": "consumer", "stage": 5, "detail": "Experience API (row-scoped)"}]
+    edges = [{"from": "d365", "to": "bronze", "label": "daily"}, {"from": "bronze", "to": "silver", "label": "DLT"},
+             {"from": "silver", "to": "gold", "label": "model"}, {"from": "gold", "to": "dataset", "label": "System API"},
+             {"from": "dataset", "to": "pbi"}, {"from": "dataset", "to": "portal"}]
+    return {"nodes": nodes, "edges": edges}
+
+
+def _mart(id_: str, name: str, obj: str, domain_id: str, summary: str, description: str, schema: list[dict], *,
+          owner: dict, steward: dict | None = None, classification: str = "Internal", policy: str = "auto",
+          grain: str, pk: list[str], tags: list[str], entity: str, filters: list[dict] | None = None,
+          audiences: list[str] | None = None, row_scope: dict | None = None, sensitive: list[str] | None = None,
+          frequency: str = "Daily 05:00 PT", consumers: list[str] | None = None) -> dict[str, Any]:
+    gold = f"enterprise.gold.{id_.replace('-', '_')}"
+    return {
+        "id": id_, "name": name, "object": obj, "domain": DOMAIN_NAMES[domain_id], "domainId": domain_id,
+        "type": "Data mart - gold", "version": "1.0.0", "classification": classification, "accessPolicy": policy,
+        "tags": tags + ["illustrative-data"], "summary": summary,
+        "description": description + " Rows in this environment are illustrative synthetic data.",
+        "owner": owner, "steward": steward or owner,
+        "refresh": {"mode": "Scheduled batch", "frequency": frequency, "freshnessSlaSeconds": 26 * 3600,
+                    "detail": "Lakehouse gold job; published to the mart after data-quality gates pass."},
+        "retention": "7 years (finance) / 3 years (operational)", "grain": grain, "primaryKey": pk,
+        "statsKey": None, "qualityRules": [], "filters": filters or [], "schema": schema,
+        "sensitiveFields": sensitive or [], "martDataset": id_,
+        "audiences": audiences or ["internal"], "rowScope": row_scope or {},
+        "lineage": _mart_lineage(name, entity, gold),
+        "consumption": {"rest": [{"method": "GET", "path": f"/system/v1/mart/{id_}", "description": "Rows (filter by any field)"}],
+                        "lakehouse": {"table": gold}},
+        "consumers": consumers or [],
+    }
+
+
+DOMAIN_NAMES = {"sales-order": "Sales Order", "customer": "Customer", "product": "Product", "logistics": "Logistics",
+                "vendor": "Vendor", "procurement": "Procurement", "finance": "Finance"}
+REGION_F = {"name": "region", "label": "Region", "type": "enum", "values": REGION_IDS}
+VENDOR_F = {"name": "vendorId", "label": "Vendor id", "type": "string"}
+COMMODITIES = ["LEAFY_GREENS", "VEGETABLES", "FRUIT", "PROTEIN", "DAIRY", "PACKAGING"]
+
+DATASETS += [
+    _mart("vendors", "Vendors", "Vendor", "vendor",
+          "Approved suppliers of produce, protein, dairy and packaging with certification and risk tier.",
+          "Vendor master from D365 (VendVendorV2) enriched with food-safety certification (GFSI) and supplier risk tier.",
+          [f("vendorId", "string", "Vendor id", key=True, example="V-1001"), f("name", "string", "Vendor name"),
+           f("category", "enum", "Primary commodity supplied"), f("homeRegion", "enum", "Region the vendor mainly supplies"),
+           f("country", "string", "Country (ISO 3166)"), f("status", "enum", "ACTIVE / ON_HOLD / INACTIVE"),
+           f("paymentTerms", "string", "Payment terms"), f("certification", "string", "Food-safety certification scheme"),
+           f("gfsiCertified", "boolean", "GFSI-benchmarked certification held"), f("riskTier", "enum", "LOW / MEDIUM / HIGH"),
+           f("onboardedDate", "date", "Approved supplier since"), f("d365VendorAccount", "string", "D365 vendor account"),
+           f("contactName", "string", "Sales contact", pii=True), f("contactEmail", "string", "Contact e-mail", pii=True),
+           f("contactPhone", "string", "Contact phone", pii=True)],
+          owner=VENDOR_OWNER, grain="One row per vendor", pk=["vendorId"], tags=["supplier", "food-safety", "master-data"],
+          entity="VendVendorV2", filters=[{"name": "category", "label": "Commodity", "type": "enum", "values": COMMODITIES},
+                                          {"name": "homeRegion", "label": "Region", "type": "enum", "values": REGION_IDS},
+                                          {"name": "riskTier", "label": "Risk tier", "type": "enum", "values": ["LOW", "MEDIUM", "HIGH"]}],
+          audiences=["internal", "external-vendor"], row_scope={"vendor": "vendorId"},
+          consumers=["Procurement", "Supplier quality", "Vendors (own record)"]),
+    _mart("vendor-scorecard", "Vendor Scorecard", "Vendor Performance", "vendor",
+          "Monthly supplier performance: on-time, fill rate, quality acceptance, lead time and grade.",
+          "Computed from purchase orders and goods receipts per vendor and month. Shared with each vendor for their own rows.",
+          [f("month", "string", "Month (YYYY-MM)", key=True), f("vendorId", "string", "Vendor id", key=True),
+           f("vendorName", "string", "Vendor name"), f("category", "enum", "Commodity"), f("poCount", "integer", "Purchase orders"),
+           f("spend", "decimal", "Spend (USD)"), f("onTimeRate", "decimal", "Receipts on or before expected date (0-1)"),
+           f("fillRate", "decimal", "Received ÷ ordered quantity (0-1)"), f("qualityAcceptRate", "decimal", "Receipts passing inspection (0-1)"),
+           f("avgLeadTimeDays", "decimal", "Average order → receipt days"), f("grade", "enum", "A / B / C / D")],
+          owner=VENDOR_OWNER, classification="Confidential", policy="approval", grain="One row per vendor × month",
+          pk=["month", "vendorId"], tags=["supplier", "performance", "kpi"], entity="Purchase receipts",
+          filters=[VENDOR_F, {"name": "month", "label": "Month", "type": "string"}],
+          audiences=["internal", "external-vendor"], row_scope={"vendor": "vendorId"}, sensitive=["spend"],
+          consumers=["Procurement", "Quarterly business reviews", "Vendors (own scorecard)"]),
+    _mart("purchase-orders", "Purchase Orders", "Purchase Order", "procurement",
+          "Raw-material and packaging purchase orders by vendor, site and region with receipt progress.",
+          "Purchase order headers from D365 (PurchPurchaseOrderHeaderV2) with received value rolled up from goods receipts.",
+          [f("poNumber", "string", "Purchase order number", key=True), f("vendorId", "string", "Vendor id"),
+           f("vendorName", "string", "Vendor name"), f("category", "enum", "Commodity"), f("region", "enum", "Receiving region"),
+           f("warehouse", "string", "Receiving warehouse"), f("siteName", "string", "Receiving site"),
+           f("buyer", "string", "Buyer", pii=True), f("orderDate", "date", "Order date"), f("expectedDate", "date", "Expected receipt"),
+           f("status", "enum", "OPEN / PARTIALLY_RECEIVED / RECEIVED / CANCELLED"), f("lineCount", "integer", "Lines"),
+           f("totalAmount", "decimal", "PO value"), f("receivedAmount", "decimal", "Value received"),
+           f("currency", "string", "Currency"), f("d365PurchaseOrder", "string", "D365 purchase order")],
+          owner=PROC_OWNER, classification="Confidential", policy="approval", grain="One row per purchase order", pk=["poNumber"],
+          tags=["procure-to-pay", "regional", "supply"], entity="PurchPurchaseOrderHeaderV2",
+          filters=[REGION_F, VENDOR_F, {"name": "status", "label": "Status", "type": "string"},
+                   {"name": "category", "label": "Commodity", "type": "enum", "values": COMMODITIES}],
+          audiences=["internal", "external-vendor"], row_scope={"vendor": "vendorId"},
+          consumers=["Buyers", "Supply planning", "Vendors (own POs)"]),
+    _mart("purchase-order-lines", "Purchase Order Lines", "Purchase Order Line", "procurement",
+          "Material-level PO lines: ordered, received and rejected quantities and unit cost.",
+          "Purchase order lines from D365 (PurchPurchaseOrderLineV2) with receipt quantities.",
+          [f("poNumber", "string", "Purchase order", key=True), f("lineNumber", "integer", "Line", key=True),
+           f("vendorId", "string", "Vendor id"), f("materialId", "string", "Raw material / packaging item"),
+           f("description", "string", "Material description"), f("commodity", "enum", "Commodity"), f("uom", "string", "Unit"),
+           f("orderedQty", "decimal", "Ordered"), f("receivedQty", "decimal", "Received"), f("rejectedQty", "decimal", "Rejected at inspection"),
+           f("unitCost", "decimal", "Unit cost"), f("lineAmount", "decimal", "Line amount"), f("expectedDate", "date", "Expected"),
+           f("status", "enum", "Line status"), f("region", "enum", "Receiving region"), f("warehouse", "string", "Warehouse")],
+          owner=PROC_OWNER, classification="Confidential", policy="approval", grain="One row per PO line",
+          pk=["poNumber", "lineNumber"], tags=["procure-to-pay", "materials"], entity="PurchPurchaseOrderLineV2",
+          filters=[REGION_F, VENDOR_F, {"name": "poNumber", "label": "PO", "type": "string"}],
+          audiences=["internal", "external-vendor"], row_scope={"vendor": "vendorId"}, sensitive=["unitCost"],
+          consumers=["Buyers", "Vendors (own lines)"]),
+    _mart("goods-receipts", "Goods Receipts & Inspection", "Goods Receipt", "procurement",
+          "Inbound receipts with lot, pulp temperature and quality inspection result - the food-safety receiving record.",
+          "Product receipts from D365 WMS joined to QA inspection results (pulp temperature, accept / hold / reject).",
+          [f("receiptId", "string", "Receipt id", key=True), f("poNumber", "string", "Purchase order"), f("lineNumber", "integer", "PO line"),
+           f("vendorId", "string", "Vendor id"), f("materialId", "string", "Material"), f("warehouse", "string", "Warehouse"),
+           f("region", "enum", "Region"), f("receivedDate", "date", "Received"), f("quantity", "decimal", "Quantity"),
+           f("rejectedQty", "decimal", "Rejected"), f("uom", "string", "Unit"), f("lotNumber", "string", "Vendor lot (traceability)"),
+           f("pulpTempF", "decimal", "Pulp temperature at receipt (°F)"), f("inspectionResult", "enum", "ACCEPTED / HOLD / REJECTED"),
+           f("onTime", "boolean", "Received by expected date")],
+          owner=PROC_OWNER, steward={"name": "Supplier quality steward", "team": "Food Safety & QA", "email": "qa-data@taylorfarms.example"},
+          grain="One row per receipt", pk=["receiptId"], tags=["food-safety", "traceability", "fsma-204", "receiving"],
+          entity="WHSProductReceipt", filters=[REGION_F, VENDOR_F, {"name": "inspectionResult", "label": "Inspection", "type": "enum",
+                                                                    "values": ["ACCEPTED", "HOLD", "REJECTED"]}],
+          audiences=["internal", "external-vendor"], row_scope={"vendor": "vendorId"}, frequency="Hourly",
+          consumers=["Food safety & QA", "Receiving", "Vendors (own receipts)"]),
+    _mart("ap-invoices", "Vendor Invoices (AP)", "Vendor Invoice", "finance",
+          "Accounts-payable invoices with three-way match result, due and paid dates.",
+          "Vendor invoices from D365 (VendInvoiceJour) with PO / receipt / invoice three-way match status and variance.",
+          [f("apInvoiceId", "string", "AP invoice id", key=True), f("vendorId", "string", "Vendor id"), f("vendorName", "string", "Vendor"),
+           f("vendorInvoiceNumber", "string", "Vendor's invoice number"), f("poNumber", "string", "Purchase order"),
+           f("region", "enum", "Region"), f("invoiceDate", "date", "Invoice date"), f("dueDate", "date", "Due date"),
+           f("amount", "decimal", "Invoice amount"), f("receivedValue", "decimal", "Value received against the PO"),
+           f("variance", "decimal", "Invoice − received value"), f("currency", "string", "Currency"),
+           f("matchStatus", "enum", "MATCHED / PRICE_VARIANCE / QTY_VARIANCE"), f("status", "enum", "OPEN / APPROVED / PAID / ON_HOLD"),
+           f("paidDate", "date", "Paid date")],
+          owner=FIN_OWNER, steward=FIN_STEWARD, classification="Confidential", policy="approval", grain="One row per vendor invoice",
+          pk=["apInvoiceId"], tags=["procure-to-pay", "accounts-payable", "three-way-match"], entity="VendInvoiceJour",
+          filters=[REGION_F, VENDOR_F, {"name": "status", "label": "Status", "type": "string"},
+                   {"name": "matchStatus", "label": "Match", "type": "enum", "values": ["MATCHED", "PRICE_VARIANCE", "QTY_VARIANCE"]}],
+          audiences=["internal", "external-vendor"], row_scope={"vendor": "vendorId"},
+          consumers=["Accounts payable", "Controllers", "Vendors (own remittance status)"]),
+    _mart("spend-by-category", "Spend by Category", "Spend Cube", "finance",
+          "Monthly purchase spend by region and commodity with vendor count and average unit cost.",
+          "Aggregated from purchase order lines (gold spend cube). Used for commodity strategy and budget variance.",
+          [f("month", "string", "Month", key=True), f("region", "enum", "Region", key=True), f("commodity", "enum", "Commodity", key=True),
+           f("spend", "decimal", "Spend (USD)"), f("poCount", "integer", "Purchase orders"), f("vendorCount", "integer", "Vendors"),
+           f("avgUnitCost", "decimal", "Average unit cost")],
+          owner=FIN_OWNER, steward=FIN_STEWARD, classification="Confidential", policy="approval",
+          grain="One row per month × region × commodity", pk=["month", "region", "commodity"], tags=["spend", "regional", "kpi"],
+          entity="Purchase lines", filters=[REGION_F, {"name": "commodity", "label": "Commodity", "type": "enum", "values": COMMODITIES}],
+          consumers=["Finance", "Category managers", "Executive dashboard"]),
+    _mart("carriers", "Carriers", "Carrier", "logistics",
+          "Contracted reefer and LTL carriers with service regions, insurance and 90-day performance.",
+          "Carrier master from D365 TMS enriched with SmartWay status and rolling 90-day loads, on-time rate and cost per mile.",
+          [f("scac", "string", "SCAC", key=True), f("name", "string", "Carrier"), f("mode", "enum", "REEFER_TL / REEFER_LTL / DEDICATED"),
+           f("regionsServed", "array<string>", "Regions served"), f("status", "enum", "Status"),
+           f("baseCostPerMile", "decimal", "Contract base rate per mile"), f("insuranceExpires", "date", "Insurance certificate expiry"),
+           f("smartWayCertified", "boolean", "EPA SmartWay partner"), f("loads90d", "integer", "Loads (90 days)"),
+           f("onTimeRate", "decimal", "On-time delivery (0-1)"), f("avgCostPerMile", "decimal", "Actual cost per mile"),
+           f("temperatureExcursions", "integer", "Reefer temperature excursions (90 days)")],
+          owner=LOG_OWNER, grain="One row per carrier", pk=["scac"], tags=["transportation", "cold-chain"], entity="TMSCarrier",
+          sensitive=["baseCostPerMile"], consumers=["Transportation", "Regional operations"]),
+    _mart("carrier-loads", "Carrier Loads", "Load", "logistics",
+          "Outbound loads by carrier and lane with cost, miles, on-time and temperature excursions.",
+          "Loads from D365 TMS with freight cost and telematics temperature excursion flags.",
+          [f("loadId", "string", "Load id", key=True), f("scac", "string", "Carrier SCAC"), f("carrierName", "string", "Carrier"),
+           f("mode", "enum", "Mode"), f("originWarehouse", "string", "Origin warehouse"), f("originRegion", "enum", "Origin region"),
+           f("destinationRegion", "enum", "Destination region"), f("shipDate", "date", "Ship date"), f("deliveryDate", "date", "Delivery date"),
+           f("status", "enum", "Status"), f("stops", "integer", "Stops"), f("pallets", "integer", "Pallets"), f("miles", "integer", "Miles"),
+           f("freightCost", "decimal", "Freight cost"), f("costPerMile", "decimal", "Cost per mile"),
+           f("onTime", "boolean", "Delivered on time"), f("temperatureExcursion", "boolean", "Reefer excursion recorded")],
+          owner=LOG_OWNER, grain="One row per load", pk=["loadId"], tags=["transportation", "regional", "freight"], entity="TMSLoad",
+          filters=[{"name": "originRegion", "label": "Origin region", "type": "enum", "values": REGION_IDS},
+                   {"name": "scac", "label": "Carrier", "type": "string"}],
+          consumers=["Transportation", "Freight audit", "Regional GMs"]),
+    _mart("item-costs", "Item Standard Costs & Margin", "Item Cost", "product",
+          "Standard cost build-up (raw material, packaging, labour, overhead) and margin per finished item.",
+          "Cost roll-up from D365 cost management for the active costing version. Highly confidential.",
+          [f("itemNumber", "string", "Item", key=True), f("description", "string", "Description"), f("listPrice", "decimal", "List price / case"),
+           f("standardCost", "decimal", "Standard cost / case"), f("rawMaterialCost", "decimal", "Raw material"),
+           f("packagingCost", "decimal", "Packaging"), f("laborCost", "decimal", "Labour"), f("overheadCost", "decimal", "Overhead"),
+           f("marginPct", "decimal", "Margin on list (0-1)"), f("costVersion", "string", "Costing version"),
+           f("costEffectiveDate", "date", "Effective"), f("active", "boolean", "Active")],
+          owner=FIN_OWNER, steward=FIN_STEWARD, classification="Confidential", policy="approval", grain="One row per item",
+          pk=["itemNumber"], tags=["cost", "margin", "pricing"], entity="InventItemPrice",
+          sensitive=["standardCost", "rawMaterialCost", "packagingCost", "laborCost", "overheadCost", "marginPct"],
+          frequency="Monthly (cost version release)", consumers=["Finance", "Pricing", "Product management"]),
+]
+
+# ------------------------------------------------------------- domain, audience and row scope of the SO datasets
+_DOMAIN_OF = {"sales-orders": "sales-order", "sales-order-lines": "sales-order", "order-lifecycle-events": "sales-order",
+              "order-exceptions": "sales-order", "orders-at-risk": "sales-order", "order-kpis": "sales-order",
+              "regional-performance": "sales-order", "price-agreements": "sales-order", "customers": "customer",
+              "ship-tos": "customer", "trading-partners": "customer", "items": "product", "sites-inventory": "product",
+              "shipments": "logistics", "invoices": "finance"}
+_EXTERNAL_CUSTOMER = {"sales-orders", "sales-order-lines", "shipments", "invoices", "items"}
+for _d in DATASETS:
+    if _d["id"] in _DOMAIN_OF:
+        _d["domainId"] = _DOMAIN_OF[_d["id"]]
+        _d["domain"] = DOMAIN_NAMES[_d["domainId"]]
+        _d["audiences"] = ["internal"] + (["external-customer"] if _d["id"] in _EXTERNAL_CUSTOMER else [])
+        _d["rowScope"] = {"customer": "customerId"} if _d["id"] in _EXTERNAL_CUSTOMER - {"items"} else {}
+    _d.setdefault("audiences", ["internal"])
+    _d.setdefault("rowScope", {})
+    _d["public"] = _d["id"] == "items"  # product catalogue: no customer row scope
+
 BY_ID = {d["id"]: d for d in DATASETS}
 DOMAINS = sorted({d["domain"] for d in DATASETS})

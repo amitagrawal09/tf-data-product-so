@@ -1,0 +1,10 @@
+<!-- Service products in entra mode: a caller that presents a user token is validated and keeps its user identity;
+     a trusted integration (approved subscription, no token) acts as the service principal. -->
+<choose>
+  <when condition="@(context.Request.Headers.ContainsKey(&quot;Authorization&quot;))">
+    __JWT__
+  </when>
+  <otherwise>
+    __SET_KEY__
+  </otherwise>
+</choose>

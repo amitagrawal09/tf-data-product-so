@@ -1,0 +1,3 @@
+<set-header name="x-api-key" exists-action="override">
+  <value>{{tfso-api-key}}</value>
+</set-header>

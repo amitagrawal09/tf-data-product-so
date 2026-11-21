@@ -1,0 +1,6 @@
+<!-- Service products in dev mode: a persona header keeps the persona identity; otherwise service principal. -->
+<choose>
+  <when condition="@(!context.Request.Headers.ContainsKey(&quot;x-dev-persona&quot;))">
+    __SET_KEY__
+  </when>
+</choose>

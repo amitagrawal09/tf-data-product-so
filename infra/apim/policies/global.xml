@@ -3,6 +3,7 @@
   Tokens replaced by Bicep at deploy time:
     __CORS_ORIGIN__  static-website origin of the Order Operations Console
     __RATE_LIMIT__   rate-limit-by-key element (omitted on the Consumption tier, which does not support it)
+    AUTH_STRIP token removes caller-supplied backend keys (always) and dev persona headers (entra mode)
 -->
 <policies>
   <inbound>
@@ -21,6 +22,7 @@
       </allowed-methods>
       <allowed-headers>
         <header>*</header>
+        <!-- includes Authorization (Entra bearer token) and x-dev-persona (non-prod personas) -->
       </allowed-headers>
       <expose-headers>
         <header>x-correlation-id</header>
@@ -28,6 +30,8 @@
         <header>Location</header>
       </expose-headers>
     </cors>
+    <!-- Callers never supply the backend key; product policies inject it for trusted service subscriptions -->
+    __AUTH_STRIP__
     <!-- Correlation id: keep the caller's, otherwise use the APIM request id -->
     <set-header name="x-correlation-id" exists-action="skip">
       <value>@(context.RequestId.ToString())</value>

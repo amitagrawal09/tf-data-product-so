@@ -52,6 +52,8 @@ STATE_DIR="$ROOT_DIR/.deploy"
 ASSUME_YES="${ASSUME_YES:-false}"
 SKIP_SMOKE="${SKIP_SMOKE:-false}"
 LOAD_DEMO_DATA="${LOAD_DEMO_DATA:-false}"
+# Authentication for Azure (docs/07, docs/08). Empty = entra when .deploy/<env>.entra.env exists, else dev (non-prod).
+AUTH_MODE="${AUTH_MODE:-}"
 
 # name:port pairs for local mode (gateway last so it starts after the backends)
 LOCAL_SERVICES=("system:8003" "process:8002" "experience:8001" "gateway:8080")
@@ -80,6 +82,8 @@ Environment variables (azure):
   ISA_SENDER_ID=${ISA_SENDER_ID}  IMAGE_TAG (default: git short sha or timestamp)
   ASSUME_YES=true  skip confirmations      SKIP_SMOKE=true  skip smoke tests
   LOAD_DEMO_DATA=true  load demo orders after an Azure (non-prod) deployment
+  AUTH_MODE=entra|dev  sign-in mode (default: entra if .deploy/<env>.entra.env exists, else dev; prod = entra only)
+                       Entra settings come from scripts/entra-setup.sh (.deploy/<env>.entra.env) or TFSO_ENTRA_* vars
 Generated secrets are kept in .deploy/<environment>.env (git-ignored) so reruns are idempotent.
 EOF
 }
@@ -206,7 +210,9 @@ local_up() {
   step "Starting services (SQLite + local HTTP bus)"
   export TFSO_ENV=local
   export TFSO_BUS_MODE=http
-  export TFSO_AUTH_MODE="${TFSO_AUTH_MODE:-apikey}"
+  # dev = sign in with test personas (x-dev-persona); the x-api-key below remains the service principal
+  # used by the smoke test and demo-data loader (docs/07 §1).
+  export TFSO_AUTH_MODE="${TFSO_AUTH_MODE:-dev}"
   export TFSO_API_KEYS="$LOCAL_API_KEY"
   export TFSO_PROCESS_URL=http://localhost:8002
   export TFSO_SYSTEM_URL=http://localhost:8003
@@ -318,6 +324,49 @@ EOF
   ok "Deployment state: ${STATE_FILE#"$ROOT_DIR"/}"
 }
 
+load_auth_config() {
+  # Entra settings: scripts/entra-setup.sh writes .deploy/<env>.entra.env; TFSO_ENTRA_* env vars override.
+  local entra_file="$STATE_DIR/${ENVIRONMENT}.entra.env" v
+  local -A preset=()
+  for v in TFSO_ENTRA_TENANT_ID TFSO_ENTRA_API_CLIENT_ID TFSO_ENTRA_AUDIENCE TFSO_ENTRA_SPA_CLIENT_ID \
+           TFSO_ENTRA_AUTHORITY TFSO_ENTRA_SCOPE TFSO_ENTRA_EXTERNAL_ISSUER TFSO_ENTRA_EXTERNAL_AUTHORITY; do
+    [[ -n "${!v:-}" ]] && preset[$v]="${!v}"
+  done
+  if [[ -f "$entra_file" ]]; then
+    # shellcheck disable=SC1090
+    source "$entra_file"
+    ok "Entra settings loaded from ${entra_file#"$ROOT_DIR"/}"
+  fi
+  for v in "${!preset[@]}"; do printf -v "$v" '%s' "${preset[$v]}"; done
+  TFSO_ENTRA_TENANT_ID="${TFSO_ENTRA_TENANT_ID:-}"
+  TFSO_ENTRA_API_CLIENT_ID="${TFSO_ENTRA_API_CLIENT_ID:-}"
+  TFSO_ENTRA_AUDIENCE="${TFSO_ENTRA_AUDIENCE:-}"
+  TFSO_ENTRA_SPA_CLIENT_ID="${TFSO_ENTRA_SPA_CLIENT_ID:-}"
+  TFSO_ENTRA_AUTHORITY="${TFSO_ENTRA_AUTHORITY:-}"
+  TFSO_ENTRA_SCOPE="${TFSO_ENTRA_SCOPE:-}"
+  TFSO_ENTRA_EXTERNAL_ISSUER="${TFSO_ENTRA_EXTERNAL_ISSUER:-}"
+  TFSO_ENTRA_EXTERNAL_AUTHORITY="${TFSO_ENTRA_EXTERNAL_AUTHORITY:-}"
+  if [[ -z "$AUTH_MODE" ]]; then
+    if [[ -n "$TFSO_ENTRA_TENANT_ID" && -n "$TFSO_ENTRA_SPA_CLIENT_ID" ]]; then AUTH_MODE=entra; else AUTH_MODE=dev; fi
+  fi
+  case "$AUTH_MODE" in
+    entra|dev|apikey) ;;
+    *) die "AUTH_MODE must be entra, dev or apikey (got '$AUTH_MODE')" ;;
+  esac
+  if [[ "$ENVIRONMENT" == "prod" && "$AUTH_MODE" != "entra" ]]; then
+    die "Production requires Entra ID single sign-on. Run scripts/entra-setup.sh (see docs/08-sso-and-access-control.md), then redeploy."
+  fi
+  if [[ "$AUTH_MODE" == "entra" ]]; then
+    [[ -n "$TFSO_ENTRA_TENANT_ID" && -n "$TFSO_ENTRA_SPA_CLIENT_ID" && -n "$TFSO_ENTRA_API_CLIENT_ID" ]] \
+      || die "AUTH_MODE=entra needs TFSO_ENTRA_TENANT_ID, TFSO_ENTRA_API_CLIENT_ID and TFSO_ENTRA_SPA_CLIENT_ID (run scripts/entra-setup.sh)"
+    # APIM accepts both values; the services get the first (api://...) and derive the GUID form themselves
+    [[ -n "$TFSO_ENTRA_AUDIENCE" ]] || TFSO_ENTRA_AUDIENCE="api://${TFSO_ENTRA_API_CLIENT_ID},${TFSO_ENTRA_API_CLIENT_ID}"
+    [[ -n "$TFSO_ENTRA_AUTHORITY" ]] || TFSO_ENTRA_AUTHORITY="https://login.microsoftonline.com/${TFSO_ENTRA_TENANT_ID}"
+    [[ -n "$TFSO_ENTRA_SCOPE" ]] || TFSO_ENTRA_SCOPE="api://${TFSO_ENTRA_API_CLIENT_ID}/access_as_user"
+  fi
+  ok "Authentication mode: ${AUTH_MODE}"
+}
+
 deployment_output() {
   # deployment_output <name>
   az deployment group show -g "$RG" -n "$DEPLOYMENT_NAME" --query "properties.outputs.$1.value" -o tsv
@@ -350,6 +399,10 @@ bicep_deploy() {
           d365ClientSecret="$D365_CLIENT_SECRET" \
           d365Company="$D365_COMPANY" \
           isaSenderId="$ISA_SENDER_ID" \
+          authMode="$AUTH_MODE" \
+          entraTenantId="$TFSO_ENTRA_TENANT_ID" \
+          entraAudience="$TFSO_ENTRA_AUDIENCE" \
+          entraExternalIssuer="$TFSO_ENTRA_EXTERNAL_ISSUER" \
         --only-show-errors -o none; then
       ok "Bicep deployment succeeded"
       return 0
@@ -404,6 +457,27 @@ register_providers() {
   fi
 }
 
+auth_config_js() {
+  # Front-end auth block (docs/07 §7). redirectUri is resolved in the browser so the same file works
+  # on the static website and behind a custom domain.
+  if [[ "$AUTH_MODE" == "entra" ]]; then
+    cat <<JS
+{
+    mode: "entra",
+    tenantId: "${TFSO_ENTRA_TENANT_ID}",
+    clientId: "${TFSO_ENTRA_SPA_CLIENT_ID}",
+    authority: "${TFSO_ENTRA_AUTHORITY}",
+    externalAuthority: "${TFSO_ENTRA_EXTERNAL_AUTHORITY}",
+    scopes: ["${TFSO_ENTRA_SCOPE}", "openid", "profile", "offline_access"],
+    redirectUri: location.origin + location.pathname,
+    postLogoutRedirectUri: location.origin + location.pathname
+  }
+JS
+  else
+    printf '{ mode: "dev" }'
+  fi
+}
+
 azure_up() {
   need az
   az account show -o none 2>/dev/null || die "Run 'az login' (and 'az account set -s <subscription>') first"
@@ -423,6 +497,7 @@ azure_up() {
   register_providers
 
   load_state
+  load_auth_config
   DEPLOYMENT_NAME="tfso-${ENVIRONMENT}"
 
   step "1/7 Resource group"
@@ -472,13 +547,16 @@ azure_up() {
     wait_http "https://${fqdn}/health" "$fqdn" 240 || warn "continuing; check 'az containerapp logs show' for $fqdn"
   done
 
-  step "5/7 APIM console subscription key"
-  local sub_key
-  sub_key="$(az rest --method post \
-    --url "https://management.azure.com/subscriptions/${sub_id}/resourceGroups/${RG}/providers/Microsoft.ApiManagement/service/${apim_name}/subscriptions/order-console/listSecrets?api-version=2022-08-01" \
-    --query primaryKey -o tsv)"
+  step "5/7 APIM subscription keys"
+  # order-console: the browser console's key (public in config.js; grants no service rights).
+  # platform-service: trusted automation (smoke test, demo data); never published.
+  local sub_key service_key apim_subs
+  apim_subs="https://management.azure.com/subscriptions/${sub_id}/resourceGroups/${RG}/providers/Microsoft.ApiManagement/service/${apim_name}/subscriptions"
+  sub_key="$(az rest --method post --url "${apim_subs}/order-console/listSecrets?api-version=2022-08-01" --query primaryKey -o tsv)"
   [[ -n "$sub_key" ]] || die "Could not read the APIM console subscription key"
-  ok "Subscription key retrieved for 'order-console'"
+  service_key="$(az rest --method post --url "${apim_subs}/platform-service/listSecrets?api-version=2022-08-01" --query primaryKey -o tsv)"
+  [[ -n "$service_key" ]] || die "Could not read the APIM platform-service subscription key"
+  ok "Subscription keys retrieved ('order-console', 'platform-service')"
 
   step "6/7 Publish the Order Operations Console (static website)"
   az storage blob service-properties update --account-name "$web_account" \
@@ -498,7 +576,8 @@ window.TFSO_CONFIG = {
   apiBase: "${apim_url}",
   subscriptionKey: "${sub_key}",
   apiKey: "",
-  environment: "${ENVIRONMENT}"
+  environment: "${ENVIRONMENT}",
+  auth: $(auth_config_js)
 };
 EOF
   local deployer_id
@@ -528,11 +607,11 @@ EOF
   ok "Console published to ${web_url}"
 
   step "7/7 Smoke test through API Management"
-  run_smoke "${apim_url%/}" --subscription-key "$sub_key"
+  run_smoke "${apim_url%/}" --subscription-key "$service_key"
 
   if [[ "$LOAD_DEMO_DATA" == "true" && "$ENVIRONMENT" != "prod" ]]; then
     step "Loading demo orders across all regions"
-    "$VENV_PY" -m tfso.tools.seed_demo --base "${apim_url%/}" --api-key "" --subscription-key "$sub_key" \
+    "$VENV_PY" -m tfso.tools.seed_demo --base "${apim_url%/}" --api-key "" --subscription-key "$service_key" \
       || warn "Demo data load failed (the platform itself is deployed)"
   fi
 

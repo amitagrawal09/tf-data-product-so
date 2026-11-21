@@ -1,14 +1,13 @@
 <!--
   API-level policy for each Tier-2 API (exp, process, system).
-  The backend Container Apps run with TFSO_AUTH_MODE=apikey; APIM injects the key from Key Vault
-  (named value "tfso-api-key"), so callers never hold the backend key and direct calls are rejected.
+  Identity is decided by the product policy (product-console.xml / product-sales-order.xml /
+  product-order-status.xml): a user token or dev persona is forwarded as-is; only trusted service
+  subscriptions get the backend key from Key Vault (named value "tfso-api-key"). Callers can never send
+  their own x-api-key: the global policy strips it.
 -->
 <policies>
   <inbound>
     <base />
-    <set-header name="x-api-key" exists-action="override">
-      <value>{{tfso-api-key}}</value>
-    </set-header>
     <set-header name="Ocp-Apim-Subscription-Key" exists-action="delete" />
     <set-header name="x-forwarded-prefix" exists-action="override">
       <value>@(context.Api.Path)</value>

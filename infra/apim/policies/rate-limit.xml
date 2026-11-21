@@ -1,1 +1,1 @@
-<rate-limit-by-key calls="600" renewal-period="60" counter-key="@(context.Subscription?.Key ?? context.Request.IpAddress)" increment-condition="@(context.Response.StatusCode != 429)" remaining-calls-header-name="x-ratelimit-remaining" />
+<rate-limit-by-key calls="600" renewal-period="60" counter-key="@((context.Subscription?.Key ?? &quot;anonymous&quot;) + &quot;|&quot; + context.Request.IpAddress)" increment-condition="@(context.Response.StatusCode != 429)" remaining-calls-header-name="x-ratelimit-remaining" />

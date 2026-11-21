@@ -20,6 +20,11 @@ param d365ClientId string
 param d365ClientSecret string
 param d365Company string
 param forceUpdateTag string
+param entraTenantId string = ''
+param entraApiClientId string = ''
+param entraSpaClientId string = ''
+param entraExternalIssuer string = ''
+param entraExternalAuthority string = ''
 
 @description('Resource id of the deployer managed identity (oneclick/identity.bicep)')
 param deployerIdentityId string
@@ -51,6 +56,15 @@ var d365Env = empty(d365Url) ? [] : [
   { name: 'D365_CLIENT_SECRET', secureValue: d365ClientSecret }
 ]
 
+// deploy.sh switches to AUTH_MODE=entra when the tenant and SPA client id are present (prod refuses anything else)
+var entraEnv = concat(
+  empty(entraTenantId) ? [] : [ { name: 'TFSO_ENTRA_TENANT_ID', value: entraTenantId } ],
+  empty(entraApiClientId) ? [] : [ { name: 'TFSO_ENTRA_API_CLIENT_ID', value: entraApiClientId } ],
+  empty(entraSpaClientId) ? [] : [ { name: 'TFSO_ENTRA_SPA_CLIENT_ID', value: entraSpaClientId } ],
+  empty(entraExternalIssuer) ? [] : [ { name: 'TFSO_ENTRA_EXTERNAL_ISSUER', value: entraExternalIssuer } ],
+  empty(entraExternalAuthority) ? [] : [ { name: 'TFSO_ENTRA_EXTERNAL_AUTHORITY', value: entraExternalAuthority } ]
+)
+
 resource deploy 'Microsoft.Resources/deploymentScripts@2023-08-01' = {
   name: 'ds-${prefix}-${environment}-deploy'
   location: location
@@ -68,7 +82,7 @@ resource deploy 'Microsoft.Resources/deploymentScripts@2023-08-01' = {
     retentionInterval: 'P1D'
     cleanupPreference: 'OnSuccess'
     forceUpdateTag: forceUpdateTag
-    environmentVariables: concat(baseEnv, tokenEnv, d365Env)
+    environmentVariables: concat(baseEnv, tokenEnv, d365Env, entraEnv)
     scriptContent: loadTextContent('bootstrap.sh')
   }
 }

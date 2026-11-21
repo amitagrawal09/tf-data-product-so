@@ -1,7 +1,13 @@
-<!-- "Sales Order Data Product" product: full channel + process access for trusted apps (console, partners). -->
+<!--
+  "Data Mart Service Integrations" product (resource name sales-order-data-product): trusted server-to-server
+  applications (D365 integrations, Databricks jobs, partner platforms, the deployment smoke test).
+  Subscriptions require approval. The SERVICE_AUTH token below is replaced by Bicep: without a user identity the call
+  acts as the service principal (backend key injected from Key Vault); with one, the user identity is kept.
+-->
 <policies>
   <inbound>
     <base />
+    __SERVICE_AUTH__
   </inbound>
   <backend>
     <base />

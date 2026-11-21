@@ -56,6 +56,25 @@ param isaSenderId string = 'TAYLORFARMS'
 @description('Expose the System API (simulator, master data) via APIM; automatically off in prod')
 param exposeSystemApi bool = environment != 'prod'
 
+// ---------------------------------------------------------------- authentication (docs/07, docs/08)
+@description('Authentication: entra = Entra ID single sign-on (required for prod; run scripts/entra-setup.sh first); dev = x-dev-persona test personas (non-prod only); apikey = legacy backend key for every call')
+@allowed([ 'apikey', 'dev', 'entra' ])
+param authMode string = 'dev'
+
+@description('Entra ID workforce tenant id (entra mode)')
+param entraTenantId string = ''
+
+@description('Token audience(s) accepted by APIM and the services: the API app client id and/or api://<client-id>, comma-separated')
+param entraAudience string = ''
+
+@description('Optional Entra External ID issuer for customers and vendors, https://<tenant-id>.ciamlogin.com/<tenant-id>/v2.0')
+param entraExternalIssuer string = ''
+
+// Production is always Entra ID. A prod deployment without Entra settings fails closed: APIM validate-jwt
+// accepts no audience, so every user call is rejected until scripts/entra-setup.sh has been run.
+// (deploy.sh refuses such a deployment up front with a clear message.)
+var effectiveAuthMode = environment == 'prod' ? 'entra' : authMode
+
 var stem = '${prefix}-${environment}'
 var suffix = take(uniqueString(resourceGroup().id, prefix, environment), 6)
 var compact = toLower(replace('${prefix}${environment}${suffix}', '-', ''))
@@ -199,6 +218,10 @@ module containerApps 'modules/containerapps.bicep' = {
     d365ClientId: d365ClientId
     d365Company: d365Company
     isaSenderId: isaSenderId
+    authMode: effectiveAuthMode
+    entraTenantId: entraTenantId
+    entraAudience: entraAudience
+    entraExternalIssuer: entraExternalIssuer
   }
   dependsOn: [ roles ] // Key Vault references + ACR pull need the role assignments first
 }
@@ -221,6 +244,10 @@ module apim 'modules/apim.bicep' = {
     exposeSystemApi: exposeSystemApi
     appInsightsId: monitoring.outputs.appInsightsId
     appInsightsInstrumentationKey: monitoring.outputs.appInsightsInstrumentationKey
+    authMode: effectiveAuthMode
+    entraTenantId: entraTenantId
+    entraAudience: entraAudience
+    entraExternalIssuer: entraExternalIssuer
   }
   dependsOn: [ roles ]
 }
@@ -229,6 +256,8 @@ output resourceGroup string = resourceGroup().name
 output apimName string = apim.outputs.name
 output apimGatewayUrl string = apim.outputs.gatewayUrl
 output apimConsoleSubscription string = apim.outputs.consoleSubscriptionName
+output apimServiceSubscription string = apim.outputs.serviceSubscriptionName
+output authMode string = effectiveAuthMode
 output acrName string = acr.outputs.name
 output acrLoginServer string = acr.outputs.loginServer
 output imageRepository string = containerImageRepo
