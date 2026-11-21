@@ -1,5 +1,5 @@
 // Global operating scope: National (all regions) → Region → Site, plus National / Regional accounts.
-// Rendered twice (top bar on desktop, slide-out nav on mobile); both copies stay in sync.
+// Rendered in the filter card under the header.
 import { scope, setScope, regions } from "./api.js";
 import { html, setHTML } from "./ui.js";
 
@@ -37,7 +37,7 @@ export function scopeLabel(s = scope()) {
 export function scopePill() {
   const s = scope();
   const scoped = Boolean(s.region || s.site || s.accountScope);
-  return html`<span class="scope-pill${scoped ? " scoped" : ""}" title="Operating scope - change it in the top bar">Scope: ${scopeLabel(s)}</span>`;
+  return html`<span class="scope-pill${scoped ? " scoped" : ""}" title="Operating scope - change it in the filter bar">Scope: ${scopeLabel(s)}</span>`;
 }
 
 function controls(prefix) {
@@ -45,12 +45,12 @@ function controls(prefix) {
       <option value="region:${r.regionId}">${r.name} region</option>
       ${(r.sites || []).map(site => html`<option value="site:${site.warehouse || site.siteId}">· ${site.name || site.warehouse}${site.city ? ` (${site.city})` : ""}</option>`)}
     </optgroup>`);
-  return html`<label class="scope-field"><span>Scope</span>
+  return html`<div class="fc-field"><label for="${prefix}-region">Scope</label>
       <select id="${prefix}-region" aria-label="Operating scope: national, region or site">
-        <option value="">National (all regions)</option>${opts}</select></label>
-    <label class="scope-field"><span>Accounts</span>
+        <option value="">National (all regions)</option>${opts}</select></div>
+    <div class="fc-field"><label for="${prefix}-acct">Accounts</label>
       <select id="${prefix}-acct" aria-label="Account scope">
-        ${Object.entries(ACCOUNT_LABEL).map(([k, l]) => html`<option value="${k}">${l}</option>`)}</select></label>`;
+        ${Object.entries(ACCOUNT_LABEL).map(([k, l]) => html`<option value="${k}">${l}</option>`)}</select></div>`;
 }
 
 function render() {

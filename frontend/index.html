@@ -3,39 +3,70 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Order Operations Console</title>
-  <meta name="description" content="Sales Order data product – test console for the Order Status and order processing APIs">
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232f7d32'/%3E%3Cpath d='M9 17l5 5 9-11' stroke='white' stroke-width='3.2' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+  <title>Enterprise Data Mart · Taylor Farms</title>
+  <meta name="description" content="Taylor Farms Enterprise Data Mart: governed data products (Sales Order, Customer, Product, Logistics, Vendor, Procurement, Finance) with Entra ID single sign-on">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231f3d2b'/%3E%3Crect width='32' height='4' fill='%23e0a526'/%3E%3Cellipse cx='16' cy='18' rx='12' ry='8' fill='%23f6f1e1'/%3E%3Cpath d='M11 15h10M16 15v8' stroke='%231f3d2b' stroke-width='2.6' stroke-linecap='round'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="css/app.css">
   <script src="config.js"></script>
 </head>
 <body>
   <a class="skip" href="#main">Skip to content</a>
-  <header class="topbar">
-    <button class="icon-btn nav-toggle" id="navToggle" aria-label="Toggle navigation" aria-expanded="false">☰</button>
-    <div class="brand">
-      <span class="brand-mark" aria-hidden="true"></span>
-      <div><strong>Order Operations Console</strong><small>Sales Order data product</small></div>
+
+  <!-- Sign-in screen (shown until a user is signed in) -->
+  <div id="signin" class="signin" hidden></div>
+
+  <div id="app" class="app" hidden>
+    <header class="topbar">
+      <button class="nav-toggle" id="navToggle" aria-label="Open navigation" aria-expanded="false" aria-controls="sidenav">
+        <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M3 6h18M3 12h18M3 18h18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      </button>
+      <a class="brand" href="#/dashboard" aria-label="Taylor Farms Enterprise Data Mart home">
+        <span class="wordmark" aria-hidden="true"><span class="wm-taylor">Taylor</span><span class="wm-farms">FARMS</span></span>
+        <span class="brand-text"><strong>Enterprise Data Mart</strong><small>Taylor Farms · Sales Order data product</small></span>
+      </a>
+      <div class="topbar-right">
+        <span class="env-chip" id="envChip" title="Environment">LOCAL</span>
+        <div class="user-menu" id="userMenu">
+          <button class="user-chip" id="userChip" aria-haspopup="menu" aria-expanded="false" aria-controls="userDrop">
+            <span class="avatar" id="userInitials" aria-hidden="true">?</span>
+            <span class="user-email" id="userEmail"></span>
+            <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg>
+          </button>
+          <div class="user-drop" id="userDrop" role="menu" hidden>
+            <div class="ud-head" id="userHead"></div>
+            <a role="menuitem" href="#/my-access">My access</a>
+            <a role="menuitem" href="#/settings">Settings</a>
+            <button role="menuitem" type="button" id="signOut">Sign out</button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <div class="shell">
+      <nav class="sidenav" id="sidenav" aria-label="Main"></nav>
+      <div class="nav-scrim" id="navScrim" hidden></div>
+      <div class="content">
+        <section class="filter-card" id="filterCard" aria-label="Filters">
+          <div class="fc-field"><label for="fEnv">Environment</label>
+            <select id="fEnv"><option>LOCAL</option></select></div>
+          <div class="fc-field"><label for="fRange">Range</label>
+            <select id="fRange">
+              <option value="24h">Last 24 h</option><option value="7d">Last 7 d</option>
+              <option value="30d">Last 30 d</option><option value="90d">Last 90 d</option>
+            </select></div>
+          <div class="fc-scope" id="scopeBar" role="group" aria-label="Operating scope"></div>
+          <div class="fc-field fc-user"><label for="fUser">User</label>
+            <input id="fUser" type="search" placeholder="contains…" autocomplete="off"></div>
+          <button class="btn primary fc-apply" id="fApply" type="button">Apply</button>
+          <form class="fc-search" id="fSearchForm" role="search">
+            <label for="fSearch" class="visually-hidden">Search</label>
+            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2" fill="none"/><path d="M20 20l-4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+            <input id="fSearch" type="search" placeholder="Search order, PO, dataset…" autocomplete="off">
+          </form>
+        </section>
+        <main id="main" tabindex="-1"></main>
+      </div>
     </div>
-    <div class="scope-bar" id="scopeBar" role="group" aria-label="Operating scope"></div>
-    <div class="topbar-right">
-      <span class="env-chip" id="envChip" title="API base">/api</span>
-      <button class="icon-btn" id="themeToggle" aria-label="Toggle dark mode">◐</button>
-    </div>
-  </header>
-  <div class="shell">
-    <nav class="sidenav" id="sidenav" aria-label="Main">
-      <div class="scope-nav" id="scopeNav" role="group" aria-label="Operating scope"></div>
-      <a href="#/dashboard" data-route="dashboard">Dashboard</a>
-      <a href="#/new" data-route="new">New order</a>
-      <a href="#/orders" data-route="orders">Orders</a>
-      <a href="#/exceptions" data-route="exceptions">Exceptions</a>
-      <a href="#/webhooks" data-route="webhooks">Webhooks</a>
-      <a href="#/marketplace" data-route="marketplace">Data marketplace</a>
-      <a href="#/explorer" data-route="explorer">API explorer</a>
-      <a href="#/settings" data-route="settings">Settings</a>
-    </nav>
-    <main id="main" tabindex="-1"></main>
   </div>
   <div class="toasts" id="toasts" aria-live="polite" aria-atomic="false"></div>
   <script type="module" src="js/app.js"></script>

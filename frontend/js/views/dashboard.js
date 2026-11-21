@@ -1,43 +1,44 @@
-// Command center for the selected operating scope (National → Region → Site, all / national / regional accounts).
+// Operations overview for the selected operating scope (National → Region → Site, all / national / regional accounts):
+// KPI cards against target, regional performance, orders at risk, most active customers and recent orders.
 import { api, items, scope, scopeQuery } from "../api.js";
-import { html, setHTML, $, fmtNum, fmtDate, fmtMoney, humanize, statusBadge, errorBox, loading, CATEGORIES } from "../ui.js";
-import { scopePill, scopeLabel, drillTo, regionName, siteName } from "../scope.js";
+import { html, setHTML, $, fmtNum, fmtDate, fmtMoney, humanize, statusBadge, errorBox, loading, CATEGORIES, kpiCard, limitedTable, wireLimited } from "../ui.js";
+import { drillTo, regionName, siteName } from "../scope.js";
+import { me, rangeFromDate, rangeLabel } from "../session.js";
+import { subtitle } from "../app.js";
 
 let timer = null;
 
 export async function mount(el) {
   const s = scope();
-  const perfTitle = s.site ? "Site performance" : s.region ? `Site performance - ${regionName(s.region)}` : "Regional performance";
+  const perfTitle = s.site ? "Site performance" : s.region ? `Site performance · ${regionName(s.region)}` : "Regional performance";
+  const p = me();
   setHTML(el, html`
     <div class="page-head">
-      <div><h1>${s.region || s.site ? "Regional command center" : "National command center"}</h1>
-        <div class="sub">Order-to-cash health for ${scopeLabel(s)} · ${scopePill()}</div></div>
+      <div><h1>Operations overview</h1>
+        <div class="sub">${subtitle()}</div></div>
       <div class="row">
+        <span class="health" id="health"></span>
         <label class="check"><input type="checkbox" id="autoRefresh"> Auto-refresh (10 s)</label>
         <button class="btn" id="refresh">Refresh</button>
-        <a class="btn primary" href="#/new">New order</a>
+        ${p && p.canOperateOrders ? html`<a class="btn primary" href="#/new">New order</a>` : ""}
       </div>
     </div>
-    <div class="card"><h2>Service health</h2><div class="health" id="health">${loading()}</div></div>
-    <div class="section-gap" id="kpis">${loading("Loading KPIs…")}</div>
+    <div id="kpis">${loading("Loading KPIs…")}</div>
     <div class="grid grid-2 section-gap">
-      <div class="card"><div class="row"><h2 style="margin:0">${perfTitle}</h2><span class="spacer"></span>
-        ${s.region || s.site ? html`<button class="btn sm" id="upScope">${s.site ? "↑ Whole region" : "↑ National"}</button>` : ""}</div>
-        <div class="small muted">Select a row to drill into it.</div>
-        <div id="perf" class="section-gap">${loading()}</div></div>
-      <div class="card"><div class="row"><h2 style="margin:0">Orders at risk</h2><span class="spacer"></span><span id="riskTotals" class="small muted"></span></div>
-        <div class="small muted">Open orders likely to miss the customer promise - act on these first.</div>
-        <div id="risk" class="section-gap">${loading()}</div></div>
+      <div class="card"><div class="panel-head"><h2>${perfTitle}</h2>
+        ${s.region || s.site ? html`<button class="btn sm" id="upScope">${s.site ? "↑ Whole region" : "↑ National"}</button>` : html`<span class="panel-hint">Select a row to drill in</span>`}</div>
+        <div id="perf">${loading()}</div></div>
+      <div class="card"><div class="panel-head"><h2>Orders at risk</h2><span id="riskTotals" class="panel-hint"></span></div>
+        <div class="panel-hint" style="margin:-6px 0 8px">Open orders likely to miss the customer promise. Act on these first.</div>
+        <div id="risk">${loading()}</div></div>
     </div>
-    <div class="grid grid-3 section-gap">
-      <div class="card"><h2>By status category</h2><div id="byCat">${loading()}</div></div>
-      <div class="card"><h2>By status</h2><div id="byStatus">${loading()}</div></div>
-      <div class="card"><h2>By channel</h2><div id="byChannel">${loading()}</div></div>
+    <div class="grid grid-2 section-gap">
+      <div class="card"><div class="panel-head"><h2>Most active customers</h2><span class="panel-hint" id="custHint">${rangeLabel()}</span></div><div id="customers">${loading()}</div></div>
+      <div class="card"><div class="panel-head"><h2>Pipeline by status</h2><span class="panel-hint">Current open and closed orders</span></div><div id="byCat">${loading()}</div></div>
     </div>
-    <div id="chanKpis"></div>
     <div class="card section-gap">
-      <div class="row"><h2 style="margin:0">Recent orders</h2><span class="spacer"></span><a href="#/orders">All orders →</a></div>
-      <div id="recent" class="section-gap">${loading()}</div>
+      <div class="panel-head"><h2>Recent orders</h2><a class="small" href="#/orders">All orders →</a></div>
+      <div id="recent">${loading()}</div>
     </div>`);
   $("#refresh", el).addEventListener("click", () => load(el));
   $("#autoRefresh", el).addEventListener("change", e => {
@@ -52,7 +53,7 @@ export async function mount(el) {
 export function unmount() { clearInterval(timer); timer = null; }
 
 async function load(el) {
-  await Promise.all([loadHealth(el), loadSummary(el), loadKpis(el), loadRisk(el), loadRecent(el)]);
+  await Promise.all([loadHealth(el), loadSummary(el), loadKpis(el), loadRisk(el), loadOrders(el)]);
 }
 
 /* ---------- formatting ---------- */
@@ -62,7 +63,11 @@ function rateClass(v) {
   const n = Number(v) > 1 ? Number(v) / 100 : Number(v);
   return n >= 0.95 ? "rate-good" : n >= 0.9 ? "rate-warn" : "rate-bad";
 }
-const rate = v => html`<span class="rate ${rateClass(v)}">${pct(v)}</span>`;
+const rate = (v, target = 0.95) => {
+  if (v === null || v === undefined || v === "") return html`<span class="pill">–</span>`;
+  const n = Number(v) > 1 ? Number(v) / 100 : Number(v);
+  return html`<span class="pill ${n >= target ? "good" : "bad"}">${pct(v)}</span>`;
+};
 function money(v) {
   if (v === null || v === undefined || v === "") return "–";
   const n = Number(v);
@@ -80,9 +85,9 @@ async function loadHealth(el) {
       const st = String((h && h.status) || "ok").toLowerCase();
       const up = ["ok", "up", "healthy", "pass"].includes(st);
       const extra = h && h.d365Mode ? ` · D365 ${h.d365Mode}` : "";
-      return html`<span title="${JSON.stringify(h)}"><span class="dot ${up ? "up" : "down"}"></span>${name} <span class="muted small">${st}${extra}${h && h.version ? " · v" + h.version : ""}</span></span>`;
+      return html`<span class="small" title="${name}: ${st}${extra}${h && h.version ? " · v" + h.version : ""}"><span class="dot ${up ? "up" : "down"}"></span>${name.replace(" API", "")}</span>`;
     } catch (e) {
-      return html`<span title="${e.message}"><span class="dot down"></span>${name} <span class="muted small">unreachable</span></span>`;
+      return html`<span class="small" title="${name} unreachable: ${e.message}"><span class="dot down"></span>${name.replace(" API", "")}</span>`;
     }
   }));
   const host = $("#health", el);
@@ -107,46 +112,38 @@ async function loadSummary(el) {
   try {
     const s = await api.process("/v1/status/summary", { query: scopeQuery() });
     const byCat = toPairs(s.byStatusCategory || s.byCategory).sort((a, b) => CATEGORIES.indexOf(a[0]) - CATEGORIES.indexOf(b[0]));
-    const byStatus = toPairs(s.byStatus).sort((a, b) => b[1] - a[1]);
-    const byChannel = toPairs(s.byChannel).sort((a, b) => b[1] - a[1]);
     setHTML($("#byCat", el), bars(byCat, "statusCategory"));
-    setHTML($("#byStatus", el), bars(byStatus, "status"));
-    setHTML($("#byChannel", el), bars(byChannel, "channel"));
   } catch (e) {
-    ["#byCat", "#byStatus", "#byChannel"].forEach(id => { const n = $(id, el); if (n) setHTML(n, errorBox(e)); });
+    const n = $("#byCat", el); if (n) setHTML(n, errorBox(e));
   }
 }
 
 /* ---------- KPIs + performance table ---------- */
+// [key, label, format, hint, test(value) → true when within target; null = informational]
+const ratio = v => (v == null || v === "" ? null : Number(v) > 1 ? Number(v) / 100 : Number(v));
 const TILES = [
-  ["perfectOrderRate", "Perfect order rate", v => pct(v), () => "North star: touchless + on time + in full", true],
-  ["revenue", "Revenue", (v, k) => money(v), k => k.avgOrderValue != null ? `Avg order ${money(k.avgOrderValue)}` : ""],
-  ["ordersTotal", "Orders", v => fmtNum(v), k => k.openExceptions != null ? `${fmtNum(k.openExceptions)} with open exceptions` : ""],
-  ["otifRate", "OTIF", v => pct(v), k => (k.onTimeDeliveryRate != null || k.inFullRate != null) ? `On time ${pct(k.onTimeDeliveryRate)} · in full ${pct(k.inFullRate)}` : "On time, in full", true],
-  ["fillRate", "Fill rate", v => pct(v), () => "Shipped ÷ ordered quantity", true],
-  ["ordersAtRisk", "Orders at risk", v => fmtNum(v), k => k.valueAtRisk != null ? `${money(k.valueAtRisk)} at risk` : ""],
-  ["touchlessRate", "Touchless rate", v => pct(v), () => "No manual touch to reach D365", true],
-  ["firstPassValidationRate", "First-pass validation", v => pct(v), () => "All quality rules first time", true],
-  ["avgReceiptToErpMinutes", "Receipt → D365", v => (v == null ? "–" : `${fmtNum(v, 1)} min`), k => k.avgReceiptToShipHours != null ? `Receipt → ship ${fmtNum(k.avgReceiptToShipHours, 1)} h` : ""],
-  ["crossRegionSourcingRate", "Cross-region sourcing", v => pct(v), () => "Orders shipped outside the home region"],
-  ["dataFreshnessSeconds", "Data freshness", v => (v == null ? "–" : `${fmtNum(v, 1)} s`), () => "Source event → data product"],
+  ["perfectOrderRate", "Perfect order", pct, () => "Target ≥ 90% · touchless, on time, in full", v => ratio(v) >= 0.9],
+  ["otifRate", "OTIF", pct, k => (k.onTimeDeliveryRate != null || k.inFullRate != null) ? `Target ≥ 95% · on time ${pct(k.onTimeDeliveryRate)} · in full ${pct(k.inFullRate)}` : "Target ≥ 95%", v => ratio(v) >= 0.95],
+  ["fillRate", "Fill rate", pct, () => "Target ≥ 98% · shipped ÷ ordered", v => ratio(v) >= 0.98],
+  ["ordersAtRisk", "At risk", v => fmtNum(v), k => k.valueAtRisk != null ? `Target 0 · ${money(k.valueAtRisk)} at risk` : "Target 0", v => Number(v) === 0],
+  ["touchlessRate", "Touchless", pct, () => "Target ≥ 80% · no manual touch", v => ratio(v) >= 0.8],
+  ["firstPassValidationRate", "First-pass", pct, () => "Target ≥ 90% · all rules first time", v => ratio(v) >= 0.9],
+  ["openExceptions", "Open exceptions", v => fmtNum(v), k => k.ordersTotal != null ? `Target 0 · of ${fmtNum(k.ordersTotal)} orders` : "Target 0", v => Number(v) === 0],
+  ["dataFreshnessSeconds", "Freshness", v => (v == null ? "–" : `${fmtNum(v, 1)} s`), () => "Target ≤ 60 s · source → data product", v => Number(v) <= 60],
 ];
 
 async function loadKpis(el) {
   const host = $("#kpis", el);
   try {
     const k = await api.process("/v1/metrics/kpis", { query: scopeQuery() });
-    const tiles = TILES.filter(([key]) => key in (k || {})).map(([key, label, fmt, hint, isRate]) => html`
-      <div class="tile${isRate ? " " + rateClass(k[key]) : ""}"><div class="label">${label}</div>
-        <div class="value">${fmt(k[key], k)}</div><div class="hint">${hint(k) || ""}</div></div>`);
-    setHTML(host, html`<div class="tiles">${tiles}</div>`);
+    const cards = TILES.filter(([key]) => key in (k || {})).map(([key, label, fmt, hint, ok]) => {
+      const v = k[key];
+      const state = v == null || v === "" ? "info" : ok(v) ? "ok" : "breach";
+      return kpiCard({ label, value: fmt(v, k), state, hint: hint(k) });
+    });
+    if ("revenue" in (k || {})) cards.push(kpiCard({ label: "Revenue", value: money(k.revenue), hint: k.avgOrderValue != null ? `Avg order ${money(k.avgOrderValue)}` : "" }));
+    setHTML(host, cards.length ? html`<div class="kpis">${cards}</div>` : html`<div class="empty card">No KPIs for this scope yet</div>`);
     renderPerf(el, k);
-    const chan = items(k && k.byChannel);
-    setHTML($("#chanKpis", el), chan.length ? html`
-      <div class="card section-gap"><h2>KPIs by channel</h2><div class="table-wrap"><table>
-        <thead><tr>${Object.keys(chan[0]).map(c => html`<th>${humanize(c)}</th>`)}</tr></thead>
-        <tbody>${chan.map(r => html`<tr>${Object.entries(r).map(([c, v]) => html`<td class="${typeof v === "number" ? "num" : ""}">${typeof v === "number" ? (/rate/i.test(c) ? pct(v) : fmtNum(v, 1)) : v ?? "–"}</td>`)}</tr>`)}</tbody>
-      </table></div></div>` : "");
   } catch (e) {
     setHTML(host, errorBox(e));
     setHTML($("#perf", el), errorBox(e));
@@ -170,10 +167,10 @@ function renderPerf(el, k) {
       <th class="num">Exceptions</th>${bySite ? "" : html`<th class="num">At risk</th>`}</tr></thead>
     <tbody>${rows.map(r => html`<tr class="clickable" tabindex="0" data-${key}="${r[key]}" data-region="${r.region || ""}" title="Drill into ${r.siteName || r.regionName || r[key]}">
       <td><strong>${bySite ? (r.siteName || siteName(r.site)) : (r.regionName || regionName(r.region))}</strong>${bySite ? html`<div class="small muted mono">${r.site}</div>` : r.crossRegionOrders ? html`<div class="small muted">${fmtNum(r.crossRegionOrders)} cross-region</div>` : ""}</td>
-      <td class="num">${fmtNum(r.orders)}</td><td class="num">${money(r.revenue)}</td>
-      <td class="num">${rate(r.otifRate)}</td><td class="num">${rate(r.fillRate)}</td>
-      ${bySite ? "" : html`<td class="num">${pct(r.touchlessRate)}</td><td class="num">${pct(r.firstPassValidationRate)}</td><td class="num">${r.avgReceiptToErpMinutes == null ? "–" : fmtNum(r.avgReceiptToErpMinutes, 1)}</td>`}
-      <td class="num">${fmtNum(r.openExceptions)}</td>
+      <td class="num">${fmtNum(r.orders)}</td><td class="num mono">${money(r.revenue)}</td>
+      <td class="num">${rate(r.otifRate)}</td><td class="num">${rate(r.fillRate, 0.98)}</td>
+      ${bySite ? "" : html`<td class="num">${rate(r.touchlessRate, 0.8)}</td><td class="num">${rate(r.firstPassValidationRate, 0.9)}</td><td class="num">${r.avgReceiptToErpMinutes == null ? "–" : fmtNum(r.avgReceiptToErpMinutes, 1)}</td>`}
+      <td class="num">${Number(r.openExceptions) ? html`<span class="pill bad">${fmtNum(r.openExceptions)}</span>` : html`<span class="pill good">0</span>`}</td>
       ${bySite ? "" : html`<td class="num">${fmtNum(r.ordersAtRisk)}${r.valueAtRisk ? html`<div class="small muted">${money(r.valueAtRisk)}</div>` : ""}</td>`}</tr>`)}</tbody></table></div>`);
   host.querySelectorAll("tr.clickable").forEach(tr => {
     const go = () => (bySite ? drillTo({ region: tr.dataset.region || s.region, site: tr.dataset.site }) : drillTo({ region: tr.dataset.region }));
@@ -210,25 +207,47 @@ async function loadRisk(el) {
   }
 }
 
-/* ---------- recent orders ---------- */
-async function loadRecent(el) {
+/* ---------- most active customers + recent orders (one query, derived client-side) ---------- */
+async function loadOrders(el) {
   const host = $("#recent", el);
+  const cust = $("#customers", el);
   try {
-    const r = await api.process("/v1/orders", { query: { ...scopeQuery(), page: 1, pageSize: 10, sort: "-receivedAt" } });
+    const r = await api.process("/v1/orders", { query: { ...scopeQuery(), fromDate: rangeFromDate(), page: 1, pageSize: 200, sort: "-receivedAt" } });
     const list = items(r);
-    if (!list.length) { setHTML(host, html`<div class="empty">No orders in this scope – <a href="#/new">create one</a>.</div>`); return; }
-    setHTML(host, html`<div class="table-wrap"><table><thead><tr>
-      <th>Order</th><th>Status</th><th>Channel</th><th>Customer</th><th>Region</th><th>Site</th><th>Received</th><th class="num">Total</th></tr></thead>
-      <tbody>${list.map(o => html`<tr class="clickable" data-id="${o.orderId}">
+    const total = r.total ?? list.length;
+    // Most active customers in the selected range (from up to 200 most recent orders).
+    const by = new Map();
+    for (const o of list) {
+      const id = o.customerId || o.customerName || "–";
+      const c = by.get(id) || { id, name: o.customerName || o.customerId || "–", orders: 0, value: 0, open: 0, currency: o.currency };
+      c.orders += 1; c.value += Number(o.totalAmount) || 0;
+      if (!["CLOSED", "CANCELLED", "INVOICED", "DELIVERED"].includes(o.statusCategory)) c.open += 1;
+      by.set(id, c);
+    }
+    const top = [...by.values()].sort((a, b) => b.orders - a.orders || b.value - a.value);
+    setHTML($("#custHint", el), html`${rangeLabel()} · from ${fmtNum(list.length)} of ${fmtNum(total)} orders`);
+    setHTML(cust, top.length ? limitedTable(html`<tr><th>Customer</th><th class="num">Orders</th><th class="num">Open</th><th class="num">Value</th></tr>`,
+      top.map(c => html`<tr class="clickable" data-cust="${c.id}"><td><strong>${c.name}</strong><div class="small muted mono">${c.id}</div></td>
+        <td class="num">${fmtNum(c.orders)}</td><td class="num">${fmtNum(c.open)}</td><td class="num mono">${money(c.value)}</td></tr>`), { limit: 8, cls: "dense" })
+      : html`<div class="empty">No orders in ${rangeLabel().toLowerCase()}</div>`);
+    wireLimited(cust);
+    cust.querySelectorAll("tr[data-cust]").forEach(tr => tr.addEventListener("click", () => { location.hash = `#/orders?customerId=${encodeURIComponent(tr.dataset.cust)}`; }));
+
+    const recent = list.slice(0, 15);
+    if (!recent.length) { setHTML(host, html`<div class="empty">No orders in this scope and range${me() && me().canOperateOrders ? html` – <a href="#/new">create one</a>` : ""}.</div>`); return; }
+    setHTML(host, limitedTable(html`<tr><th>Order</th><th>Status</th><th>Channel</th><th>Customer</th><th>PO</th><th>Region</th><th>Site</th><th>Received</th><th class="num">Total</th></tr>`,
+      recent.map(o => html`<tr class="clickable" data-id="${o.orderId}">
         <td class="mono"><a href="#/orders/${encodeURIComponent(o.orderId)}">${o.orderId}</a></td>
         <td>${statusBadge(o.status, o.statusCategory)}</td><td>${o.sourceChannel || ""}</td>
         <td>${o.customerName || o.customerId || ""}${o.accountScope === "NATIONAL" ? html` <span class="tag">National</span>` : ""}</td>
+        <td class="mono small">${o.customerPo || "–"}</td>
         <td>${o.regionName || regionName(o.region) || "–"}${o.crossRegion ? html` <span class="tag" title="Shipped from outside the home region">cross-region</span>` : ""}</td>
         <td class="small mono">${o.shipFromWarehouse || "–"}</td>
-        <td class="nowrap">${fmtDate(o.receivedAt)}</td><td class="num">${fmtMoney(o.totalAmount, o.currency)}</td></tr>`)}</tbody></table></div>`);
+        <td class="nowrap">${fmtDate(o.receivedAt)}</td><td class="num mono">${fmtMoney(o.totalAmount, o.currency)}</td></tr>`), { limit: 10 }));
+    wireLimited(host);
     host.querySelectorAll("tr.clickable").forEach(tr => tr.addEventListener("click", e => {
       if (e.target.closest("a")) return;
       location.hash = `#/orders/${encodeURIComponent(tr.dataset.id)}`;
     }));
-  } catch (e) { setHTML(host, errorBox(e)); }
+  } catch (e) { setHTML(host, errorBox(e)); setHTML(cust, errorBox(e)); }
 }

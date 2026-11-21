@@ -1,6 +1,7 @@
 import { api, items, scopeQuery } from "../api.js";
 import { html, setHTML, $, fmtDate, fmtMoney, statusBadge, errorBox, loading, humanize, STATUSES, CATEGORIES, CHANNELS } from "../ui.js";
 import { regionsLoaded, regionName, scopePill } from "../scope.js";
+import { me, rangeFromDate, rangeLabel } from "../session.js";
 
 // `region` in the URL overrides the global operating scope; "ALL" means national (ignore the global region/site).
 const FIELDS = ["region", "accountScope", "status", "statusCategory", "channel", "customerId", "customerPo", "erpSalesOrderId", "q", "fromDate", "toDate", "hasExceptions", "sort", "page", "pageSize"];
@@ -17,8 +18,8 @@ export async function mount(el, qs) {
   const effAcct = f.accountScope || global.accountScope || "";
 
   setHTML(el, html`
-    <div class="page-head"><div><h1>Orders</h1><div class="sub">Search the Order Status API (<span class="mono">GET /process/v1/orders</span>) · ${scopePill()}</div></div>
-      <a class="btn primary" href="#/new">New order</a></div>
+    <div class="page-head"><div><h1>Orders</h1><div class="sub">${rangeLabel()} · Order Status API (<span class="mono">GET /process/v1/orders</span>) · ${scopePill()}</div></div>
+      ${me().canOperateOrders ? html`<a class="btn primary" href="#/new">New order</a>` : ""}</div>
     <form class="card" id="search">
       <div class="fields">
         <div class="field"><label for="region">Region</label><select id="region">
@@ -53,6 +54,8 @@ export async function mount(el, qs) {
   // Global scope first, then explicit URL filters ("ALL" clears the global value).
   const query = { ...global };
   for (const k of FIELDS) if (f[k] !== "" && f[k] !== undefined) query[k] = f[k];
+  // Filter card range → fromDate (unless the search sets dates or looks up a specific order).
+  if (!f.fromDate && !f.toDate && !f.q && !f.customerPo && !f.erpSalesOrderId) query.fromDate = rangeFromDate();
   if (f.region && f.region !== global.region) delete query.site; // site belongs to the global region
   for (const k of ["region", "accountScope"]) if (query[k] === "ALL") delete query[k];
   if (!query.region) delete query.site;

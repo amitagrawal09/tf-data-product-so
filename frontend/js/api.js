@@ -1,4 +1,7 @@
 // Fetch wrapper for the Experience / Process / System APIs (direct, via local gateway, or via Azure APIM).
+// Every request carries the signed-in user's identity (x-dev-persona in dev mode, Authorization: Bearer with
+// Entra ID). HTTP 401 sends the user back to the sign-in page.
+import { authHeaders, onUnauthorized } from "./auth.js";
 
 const STORAGE_KEY = "tfso.settings";
 
@@ -114,7 +117,7 @@ export async function request(layer, path, opts = {}) {
     else { body = JSON.stringify(opts.body); headers["Content-Type"] = "application/json"; }
   }
   if (opts.idempotent) headers["Idempotency-Key"] = uuid();
-  Object.assign(headers, opts.headers || {});
+  Object.assign(headers, await authHeaders(), opts.headers || {});
 
   const call = {
     id: ++callSeq, at: new Date().toISOString(), layer: layer || (path.split("/")[1] || ""),
@@ -147,6 +150,7 @@ export async function request(layer, path, opts = {}) {
   res.headers.forEach((v, k) => { h[k] = v; });
   call.response = { status: res.status, ok: res.ok, ms, headers: h, body: data, correlationId: respCorr };
   record(call);
+  if (res.status === 401 && !opts.noSignInRedirect) onUnauthorized();
   if (opts.raw) {
     return { status: res.status, ok: res.ok, headers: h, data, ms, correlationId: respCorr, url, call };
   }
@@ -178,7 +182,7 @@ export async function download(layer, path, opts = {}) {
   const headers = { "x-correlation-id": uuid(), Accept: "*/*" };
   if (s.apiKey) headers["x-api-key"] = s.apiKey;
   if (s.subscriptionKey) headers["Ocp-Apim-Subscription-Key"] = s.subscriptionKey;
-  Object.assign(headers, opts.headers || {});
+  Object.assign(headers, await authHeaders(), opts.headers || {});
   const call = { id: ++callSeq, at: new Date().toISOString(), layer, source: opts.source || (location.hash || "#/").replace(/^#/, ""),
                  request: { method: "GET", url, path: `/${layer}${path}`, headers: maskHeaders(headers), body: undefined }, response: null };
   const t0 = performance.now();
@@ -196,6 +200,7 @@ export async function download(layer, path, opts = {}) {
     try { problem = await res.json(); } catch { problem = { title: `HTTP ${res.status}` }; }
     call.response = { status: res.status, ok: false, ms, headers: h, body: problem };
     record(call);
+    if (res.status === 401) onUnauthorized();
     return { ok: false, status: res.status, problem, headers: h };
   }
   const blob = await res.blob();

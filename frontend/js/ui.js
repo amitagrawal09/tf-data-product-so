@@ -38,6 +38,7 @@ export function toast(message, kind = "") {
 
 export function errorBox(err) {
   if (!err) return "";
+  if (err.status === 403) return deniedBox(err.message);
   const lines = err.details || [];
   return html`<div class="alert error" role="alert"><strong>${err.status ? `HTTP ${err.status} – ` : ""}${err.message}</strong>
     ${lines.length ? html`<ul>${lines.map(l => html`<li>${l}</li>`)}</ul>` : ""}
@@ -143,3 +144,51 @@ export function pick(obj, ...paths) {
 }
 
 export function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+/** Friendly "no access" panel for HTTP 403 responses and route guards. */
+export function deniedBox(detail, title = "You don't have access") {
+  return html`<div class="denied" role="alert">
+    ${raw('<svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" stroke-width="2"/></svg>')}
+    <div><h2>${title}</h2>
+      <div>${detail && !/^HTTP 403$/.test(detail) ? detail : "Your account does not have the app role this page or dataset needs."}</div>
+      <div class="small muted" style="margin-top:6px">See <a href="#/my-access">My access</a> for your roles, or request access to a dataset from the catalog.</div></div></div>`;
+}
+
+/* ---------- KPI cards (green when OK, red when breaching, grey when informational) ---------- */
+const KPI_ICON = {
+  ok: '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 6.2l2.3 2.3 4.7-5" stroke="#fff" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  breach: '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M6 2.5v4.2M6 9.2v.3" stroke="#fff" stroke-width="1.9" stroke-linecap="round"/></svg>',
+  info: '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M6 5.4v3.8M6 2.8v.3" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/></svg>',
+};
+/** state: "ok" | "breach" | "info" */
+export function kpiCard({ label, value, state = "info", hint = "", title = "" }) {
+  const cls = state === "ok" ? "ok" : state === "breach" ? "breach" : "info";
+  const sr = cls === "ok" ? "within target" : cls === "breach" ? "breaching target" : "informational";
+  return html`<div class="kpi ${cls}" title="${title}"><div class="k-label"><span>${label}</span><span class="k-icon" role="img" aria-label="${sr}">${raw(KPI_ICON[cls])}</span></div>
+    <div class="k-value">${value}</div>${hint ? html`<div class="k-hint">${hint}</div>` : ""}</div>`;
+}
+
+/**
+ * Table that shows the first `limit` rows with a "10 of 15 rows · Show all" footer.
+ * headHtml: <tr>…</tr>; rows: array of <tr> html. Call wireLimited(host) after setHTML.
+ */
+export function limitedTable(headHtml, rows, { limit = 10, cls = "" } = {}) {
+  const total = rows.length;
+  const shown = Math.min(limit, total);
+  return html`<div class="table-wrap" data-limited="${limit}"><table class="${cls}"><thead>${headHtml}</thead><tbody>${rows}</tbody></table>
+    ${total ? html`<div class="table-foot"><span data-count>${shown} of ${total} rows</span>${total > limit ? html`<button class="btn sm" type="button" data-showall>Show all</button>` : ""}</div>` : ""}</div>`;
+}
+export function wireLimited(host) {
+  host.querySelectorAll("[data-limited]").forEach(w => {
+    const limit = Number(w.dataset.limited);
+    const trs = [...w.querySelectorAll(":scope > table > tbody > tr")];
+    const set = open => {
+      trs.forEach((tr, i) => { tr.hidden = !open && i >= limit; });
+      const c = w.querySelector("[data-count]");
+      if (c) c.textContent = `${open ? trs.length : Math.min(limit, trs.length)} of ${trs.length} rows`;
+    };
+    set(false);
+    const b = w.querySelector("[data-showall]");
+    if (b) b.addEventListener("click", () => { const open = b.dataset.open !== "1"; b.dataset.open = open ? "1" : ""; b.textContent = open ? "Show fewer" : "Show all"; set(open); });
+  });
+}

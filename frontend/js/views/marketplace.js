@@ -1,22 +1,33 @@
-// Data marketplace: catalog of governed datasets (Sales Orders, lines, history, shipments, invoices, KPIs,
-// customers, ship-tos, items, prices, partners) with definitions, lineage, refresh SLAs, preview, export and
-// access requests. Every action is fulfilled by the Experience → Process / System APIs.
+// Enterprise Data Mart catalog: governed datasets across the Sales Order, Customer, Product, Logistics, Vendor,
+// Procurement and Finance domains, with definitions, lineage, refresh SLAs, preview, export and access requests.
+// What a user sees is decided by their Entra ID app roles (contract §5): inaccessible datasets are shown locked to
+// internal users (so they can request access) and hidden from external users; external rows are scoped to their
+// own customer / vendor id. Every action is fulfilled by the Experience → Process / System APIs.
 import { api, download, loadSettings, scope } from "../api.js";
-import { scopePill, regionName } from "../scope.js";
-import { html, raw, setHTML, $, $$, toast, errorBox, loading, fmtDate, fmtNum, esc } from "../ui.js";
+import { regionName } from "../scope.js";
+import { html, raw, setHTML, $, $$, toast, errorBox, loading, fmtDate, fmtNum, esc, kpiCard } from "../ui.js";
+import { me, domains, domainName, isExternal, matchesUser } from "../session.js";
+import { authMode } from "../auth.js";
+import { subtitle } from "../app.js";
 
-const ID_KEY = "tfso.consumer";
 const TABS = [["overview", "Overview"], ["schema", "Data definition"], ["lineage", "Lineage"], ["preview", "Preview"],
               ["export", "Retrieve / export"], ["access", "Access"], ["consume", "How to consume"]];
+const LOCKED_TABS = ["overview", "schema", "lineage", "access"];
+const mp = (path, opts = {}) => api.exp(`/marketplace/v1${path}`, opts);
 
-/* ---------- consumer identity (sent as x-user-id) ---------- */
-function identity() {
-  try { return Object.assign({ userId: "analyst@taylorfarms.example", team: "Commercial Analytics" }, JSON.parse(localStorage.getItem(ID_KEY) || "{}")); }
-  catch { return { userId: "analyst@taylorfarms.example", team: "Commercial Analytics" }; }
+const LOCK = raw('<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" stroke-width="2"/></svg>');
+const AUD_LABEL = { internal: "Internal", "external-customer": "Customers", "external-vendor": "Vendors" };
+const audBadges = d => html`${(d.audiences || []).map(a => html`<span class="badge aud aud-${a}" title="Audience: ${a}">${AUD_LABEL[a] || a}</span>`)}`;
+/** True when the signed-in user's rows of this dataset are restricted (customer / vendor / region scope). */
+function rowScoped(d) {
+  const p = me();
+  if (!p) return false;
+  const rs = d.rowScope || {};
+  return Boolean((rs.customer && p.scope.customerIds.length) || (rs.vendor && p.scope.vendorIds.length)
+    || (p.scope.regions.length && /^sales-|^order-|orders-at-risk|regional-performance|shipments/.test(d.id)));
 }
-function setIdentity(v) { try { localStorage.setItem(ID_KEY, JSON.stringify(v)); } catch { /* storage unavailable */ } }
-const H = () => ({ "x-user-id": identity().userId });
-const mp = (path, opts = {}) => api.exp(`/marketplace/v1${path}`, { ...opts, headers: { ...H(), ...(opts.headers || {}) } });
+const scopeBadge = d => (rowScoped(d) ? html`<span class="badge rowscope" title="Rows are filtered to your account by the API">Row-scoped to your account</span>` : "");
+const isLocked = d => d && d.accessible === false;
 
 /* ---------- formatting ---------- */
 function ago(ts) {
@@ -40,36 +51,49 @@ const freshDot = st => html`<span class="fresh fresh-${st || "UNKNOWN"}" title="
  * ===================================================================================*/
 let filters = { q: "", domain: "", classification: "", type: "" };
 
+export function unmount() {}
+
+/** #/marketplace/<id>/<tab> */
 export async function mount(el, id, tab) {
   if (id) return mountDetail(el, decodeURIComponent(id), tab);
-  const me = identity();
+  return mountCatalog(el, "");
+}
+
+/** #/marketplace?domain=<id>&q=<text> */
+export async function mountCatalog(el, qs) {
+  const params = new URLSearchParams(qs || "");
+  filters = { q: params.get("q") || "", domain: params.get("domain") || "", classification: "", type: "" };
+  const p = me();
+  const doms = await domains();
+  const dom = doms.find(d => d.domainId === filters.domain);
   setHTML(el, html`
-    <div class="page-head"><div><h1>Data marketplace</h1>
-      <div class="sub">Governed datasets from the Sales Order data product and the master data it depends on. Find data, read its definition and lineage, check freshness, then preview, request access and export. Every request is fulfilled by the Experience → Process / System APIs.</div>
-      <div class="section-gap">${scopePill()} <span class="small muted">Regional and account filters on order datasets default to this scope.</span></div></div>
-      <div class="identity card" style="padding:8px 12px"><div class="small muted">Consuming as</div>
-        <div><strong id="who">${me.userId}</strong> <span class="small muted">${me.team}</span> <button class="btn sm" id="changeWho">Change</button></div></div>
+    <div class="page-head"><div>
+      <div class="crumb">${dom ? html`<a href="#/marketplace">Catalog</a> /` : "Data Mart"}</div>
+      <h1>${dom ? `${dom.name} domain` : "Data catalog"}</h1>
+      <div class="sub">${subtitle()}</div></div>
+      ${isExternal(p) ? html`<span class="badge rowscope" style="font-size:12px">Row-scoped to your account</span>` : ""}
     </div>
+    ${dom && dom.description ? html`<p class="muted" style="margin-top:-8px">${dom.description}${dom.owner ? html` · Owner <strong>${typeof dom.owner === "object" ? dom.owner.name || dom.owner.team : dom.owner}</strong>` : ""}</p>` : ""}
     <div id="tiles">${loading()}</div>
+    ${doms.length ? html`<div class="card section-gap"><div class="panel-head"><h2>Domains</h2>
+        <span class="panel-hint">${isExternal(p) ? "Domains shared with your organisation" : "Locked domains need a Domain.<X>.Read role - request access from a dataset"}</span></div>
+      <div class="domain-tiles">
+        <a class="domain-tile" href="#/marketplace" aria-current="${!filters.domain}"><div class="d-name">All domains</div>
+          <div class="d-meta">${fmtNum(doms.reduce((a, d) => a + (d.accessibleDatasets ?? 0), 0))} accessible datasets</div></a>
+        ${doms.map(d => html`<a class="domain-tile ${d.accessible === false ? "nope" : ""}" href="#/marketplace?domain=${encodeURIComponent(d.domainId)}" aria-current="${filters.domain === d.domainId}">
+          <div class="d-name"><span>${d.name}</span>${d.accessible === false ? LOCK : ""}</div>
+          <div class="d-meta">${fmtNum(d.accessibleDatasets ?? 0)} of ${fmtNum(Array.isArray(d.datasets) ? d.datasets.length : d.datasets ?? 0)} datasets accessible</div></a>`)}
+      </div></div>` : ""}
     <div class="card section-gap">
       <div class="row" style="gap:8px;flex-wrap:wrap">
-        <input id="q" type="search" placeholder="Search datasets, fields, tags… (e.g. customer, gtin, traceability)" style="flex:1;min-width:220px" value="${filters.q}" aria-label="Search">
+        <input id="q" type="search" placeholder="Search datasets, fields, tags… (e.g. customer, gtin, vendor)" style="flex:1;min-width:200px" value="${filters.q}" aria-label="Search datasets">
         <select id="cls" aria-label="Classification" style="width:auto"><option value="">All classifications</option></select>
         <select id="typ" aria-label="Type" style="width:auto"><option value="">All types</option></select>
       </div>
-      <div class="row section-gap" id="domains" role="group" aria-label="Domain"></div>
     </div>
     <div class="ds-grid section-gap" id="grid">${loading()}</div>
     <details class="section-gap small"><summary>Backend API calls used to compute this catalog</summary><div id="calls"></div></details>`);
 
-  $("#changeWho", el).addEventListener("click", () => {
-    const cur = identity();
-    const userId = prompt("Your user id / e-mail (sent as x-user-id):", cur.userId);
-    if (!userId) return;
-    const team = prompt("Your team:", cur.team) || cur.team;
-    setIdentity({ userId: userId.trim(), team });
-    mount(el);
-  });
   let t;
   $("#q", el).addEventListener("input", e => { clearTimeout(t); t = setTimeout(() => { filters.q = e.target.value; load(el); }, 250); });
   $("#cls", el).addEventListener("change", e => { filters.classification = e.target.value; load(el); });
@@ -83,46 +107,58 @@ async function load(el, first = false) {
   catch (e) { setHTML($("#grid", el), errorBox(e)); return; }
   if (first) {
     const all = res;
-    const total = all.items.reduce((a, d) => a + (d.recordCount || 0), 0);
-    const exports = all.items.reduce((a, d) => a + ((d.usage || {}).exports || 0), 0);
-    setHTML($("#tiles", el), html`<div class="grid grid-4">
-      <div class="tile"><div class="label">Datasets</div><div class="value">${all.total}</div><div class="hint">${all.domains.length} domains</div></div>
-      <div class="tile"><div class="label">Certified data products</div><div class="value">${all.items.filter(d => d.certified).length}</div><div class="hint">Contract-governed output ports</div></div>
-      <div class="tile"><div class="label">Records available</div><div class="value">${fmtNum(total)}</div><div class="hint">Live from the APIs</div></div>
-      <div class="tile"><div class="label">Exports (audited)</div><div class="value">${fmtNum(exports)}</div><div class="hint">All consumers</div></div></div>`);
-    $("#cls", el).insertAdjacentHTML("beforeend", all.classifications.map(c => `<option>${esc(c)}</option>`).join(""));
-    $("#typ", el).insertAdjacentHTML("beforeend", all.types.map(c => `<option>${esc(c)}</option>`).join(""));
-    const dom = $("#domains", el);
-    setHTML(dom, html`<button class="fchip" aria-pressed="${!filters.domain}" data-dom="">All domains</button>${all.domains.map(d => html`<button class="fchip" aria-pressed="${filters.domain === d}" data-dom="${d}">${d}</button>`)}`);
-    dom.addEventListener("click", e => {
-      const b = e.target.closest("[data-dom]");
-      if (!b) return;
-      filters.domain = b.dataset.dom;
-      $$("[data-dom]", dom).forEach(x => x.setAttribute("aria-pressed", String(x === b)));
-      load(el);
-    });
+    const list = all.items;
+    const open = list.filter(d => !isLocked(d));
+    const total = open.reduce((a, d) => a + (d.recordCount || 0), 0);
+    const exports = list.reduce((a, d) => a + ((d.usage || {}).exports || 0), 0);
+    const p = me();
+    setHTML($("#tiles", el), html`<div class="kpis">
+      ${kpiCard({ label: "Datasets", value: fmtNum(all.total ?? list.length), hint: `${(all.domains || []).length} domains` })}
+      ${kpiCard({ label: "Accessible to you", value: fmtNum(open.length), state: open.length ? "ok" : "breach", hint: list.length - open.length ? `${list.length - open.length} locked · request access` : "Everything listed is open to you" })}
+      ${kpiCard({ label: "Certified products", value: fmtNum(list.filter(d => d.certified).length), hint: "Contract-governed output ports" })}
+      ${kpiCard({ label: "Records available", value: fmtNum(total), hint: isExternal(p) ? "Your rows only" : "Live from the APIs" })}
+      ${!isExternal(p) ? kpiCard({ label: "Exports (audited)", value: fmtNum(exports), hint: p && p.canExport ? "You can export" : "Preview only (no DataMart.Export)" }) : ""}
+    </div>`);
+    $("#cls", el).insertAdjacentHTML("beforeend", (all.classifications || []).map(c => `<option>${esc(c)}</option>`).join(""));
+    $("#typ", el).insertAdjacentHTML("beforeend", (all.types || []).map(c => `<option>${esc(c)}</option>`).join(""));
   }
   setHTML($("#calls", el), html`<pre class="json">${(res.fulfilledBy || []).join("\n")}</pre>`);
   const grid = $("#grid", el);
   if (!res.items.length) { setHTML(grid, html`<div class="empty card">No datasets match your search.</div>`); return; }
-  setHTML(grid, html`${res.items.map(d => html`
-    <a class="ds-card card" href="#/marketplace/${encodeURIComponent(d.id)}">
+  // Accessible first, then locked (internal users only see locked datasets so they can request access).
+  const sorted = res.items.slice().sort((a, b) => Number(isLocked(a)) - Number(isLocked(b)));
+  setHTML(grid, html`${sorted.map(d => card(d))}`);
+  grid.addEventListener("click", e => {
+    const b = e.target.closest("[data-request]");
+    if (!b) return;
+    e.preventDefault();
+    location.hash = `#/marketplace/${encodeURIComponent(b.dataset.request)}/access`;
+  });
+}
+
+function card(d) {
+  const locked = isLocked(d);
+  return html`
+    <a class="ds-card card ${locked ? "locked" : ""}" href="#/marketplace/${encodeURIComponent(d.id)}">
       <div class="row" style="justify-content:space-between;align-items:flex-start;gap:8px">
-        <div><div class="small muted">${d.domain} · ${d.object}</div><h3 style="margin:2px 0 0">${d.name}</h3></div>
+        <div style="min-width:0"><div class="small muted">${d.domainName || d.domain} · ${d.object}</div><h3 style="margin:2px 0 0" class="row">${locked ? LOCK : ""}${d.name}</h3></div>
         <div class="row" style="gap:4px">${d.certified ? html`<span class="badge ok" title="Certified data product">Certified</span>` : ""}${classBadge(d.classification)}</div>
       </div>
+      <div class="row" style="gap:4px;margin-top:6px">${audBadges(d)}${scopeBadge(d)}</div>
       <p class="small" style="margin:8px 0">${d.summary}</p>
-      <div class="ds-facts small">
+      ${locked ? html`<div class="lock-line">${LOCK}<div><strong>Locked.</strong> ${d.lockedReason || "You do not have a role for this domain."}
+          <div style="margin-top:6px"><button class="btn sm" type="button" data-request="${d.id}">Request access</button></div></div></div>`
+        : html`<div class="ds-facts small">
         <div><span class="muted">Records</span><strong>${d.recordCount == null ? "–" : fmtNum(d.recordCount)}</strong></div>
-        <div><span class="muted">Refresh</span><strong>${d.refresh.frequency}</strong></div>
-        <div><span class="muted">Freshness</span><strong>${freshDot(d.freshnessStatus)} ${d.freshnessStatus === "DELAYED" ? "Delayed" : "On time"} · SLA ${sla(d.refresh.freshnessSlaSeconds)}</strong></div>
+        <div><span class="muted">Refresh</span><strong>${(d.refresh || {}).frequency || "–"}</strong></div>
+        <div><span class="muted">Freshness</span><strong>${freshDot(d.freshnessStatus)} ${d.freshnessStatus === "DELAYED" ? "Delayed" : "On time"} · SLA ${sla((d.refresh || {}).freshnessSlaSeconds)}</strong></div>
         <div><span class="muted">Last change</span><strong>${ago(d.lastDataChangeAt)}</strong></div>
-      </div>
+      </div>`}
       <div class="row small muted" style="margin-top:8px;gap:6px;flex-wrap:wrap">
-        <span>${d.type}</span><span>·</span><span>${d.fieldCount} fields${d.piiFieldCount ? ` (${d.piiFieldCount} PII)` : ""}</span><span>·</span><span>${d.owner.team}</span>
+        <span>${d.type}</span><span>·</span><span>${d.fieldCount} fields${d.piiFieldCount ? ` (${d.piiFieldCount} PII)` : ""}</span><span>·</span><span>${(d.owner || {}).team || ""}</span>
       </div>
-      <div class="row" style="margin-top:8px;gap:4px;flex-wrap:wrap">${d.tags.map(t => html`<span class="tag">#${t}</span>`)}</div>
-    </a>`)}`);
+      <div class="row" style="margin-top:8px;gap:4px;flex-wrap:wrap">${(d.tags || []).map(t => html`<span class="tag">#${t}</span>`)}</div>
+    </a>`;
 }
 
 /* =====================================================================================
@@ -130,36 +166,71 @@ async function load(el, first = false) {
  * ===================================================================================*/
 let ds = null, curTab = "overview";
 
+let reqTab = "overview";
 async function mountDetail(el, id, tab) {
-  curTab = TABS.some(t => t[0] === tab) ? tab : "overview";
-  setHTML(el, html`<div class="page-head"><div><div class="small muted"><a href="#/marketplace">Data marketplace</a> /</div>
+  reqTab = TABS.some(t => t[0] === tab) ? tab : "overview";
+  curTab = reqTab;
+  setHTML(el, html`<div class="page-head"><div><div class="crumb"><a href="#/marketplace">Catalog</a> / <span id="dsDom"></span></div>
       <h1 id="dsTitle">${id}</h1><div class="sub" id="dsSub"></div></div>
       <div class="row"><button class="btn" id="dsReload">Refresh</button></div></div>
     <div id="dsTiles">${loading()}</div>
-    <div class="section-gap tabs" role="tablist">${TABS.map(([k, l]) => html`<button role="tab" data-tab="${k}" aria-selected="${k === curTab}">${l}</button>`)}</div>
+    <div id="dsLock"></div>
+    <div class="section-gap tabs" role="tablist" id="dsTabs"></div>
     <div id="dsTab"></div>`);
-  $$(".tabs button", el).forEach(b => b.addEventListener("click", () => {
-    curTab = b.dataset.tab;
-    $$(".tabs button", el).forEach(x => x.setAttribute("aria-selected", String(x === b)));
-    history.replaceState(null, "", `#/marketplace/${encodeURIComponent(id)}/${curTab}`);
-    renderTab(el);
-  }));
   $("#dsReload", el).addEventListener("click", () => loadDetail(el, id));
   await loadDetail(el, id);
 }
 
+function renderTabs(el, id) {
+  const tabs = TABS.filter(([k]) => !isLocked(ds) || LOCKED_TABS.includes(k));
+  if (!tabs.some(t => t[0] === curTab)) curTab = isLocked(ds) && reqTab === "access" ? "access" : "overview";
+  const host = $("#dsTabs", el);
+  setHTML(host, html`${tabs.map(([k, l]) => html`<button role="tab" data-tab="${k}" aria-selected="${k === curTab}">${l}</button>`)}`);
+  $$("button", host).forEach(b => b.addEventListener("click", () => {
+    curTab = b.dataset.tab;
+    $$("button", host).forEach(x => x.setAttribute("aria-selected", String(x === b)));
+    history.replaceState(null, "", `#/marketplace/${encodeURIComponent(id)}/${curTab}`);
+    renderTab(el);
+  }));
+}
+
 async function loadDetail(el, id) {
   try { ds = await mp(`/datasets/${encodeURIComponent(id)}`); }
-  catch (e) { setHTML($("#dsTiles", el), errorBox(e)); return; }
+  catch (e) { setHTML($("#dsTiles", el), errorBox(e)); setHTML($("#dsTabs", el), ""); return; }
+  ds.refresh = ds.refresh || {};
+  ds.myAccess = ds.myAccess || {};
+  ds.schema = ds.schema || [];
+  for (const k of ["primaryKey", "tags", "consumers", "qualityRules", "formats", "filters", "audiences"]) ds[k] = ds[k] || [];
+  ds.lineage = ds.lineage || { nodes: [], edges: [] };
+  ds.owner = ds.owner || { name: "–", team: "", email: "" };
+  ds.steward = ds.steward || ds.owner;
   $("#dsTitle", el).textContent = ds.name;
-  setHTML($("#dsSub", el), html`${ds.domain} · ${ds.object} · ${ds.type} · v${ds.version} ${classBadge(ds.classification)} ${ds.certified ? html`<span class="badge ok">Certified</span>` : ""}`);
+  setHTML($("#dsDom", el), html`<a href="#/marketplace?domain=${encodeURIComponent(ds.domainId || "")}">${ds.domainName || domainName(ds.domainId) || ds.domain}</a>`);
+  setHTML($("#dsSub", el), html`${ds.object} · ${ds.type} · v${ds.version} ${classBadge(ds.classification)} ${ds.certified ? html`<span class="badge ok">Certified</span>` : ""} ${audBadges(ds)} ${scopeBadge(ds)}`);
   const u = ds.usage || {};
-  setHTML($("#dsTiles", el), html`<div class="grid grid-4">
-    <div class="tile"><div class="label">Records</div><div class="value">${ds.recordCount == null ? "–" : fmtNum(ds.recordCount)}</div><div class="hint">${ds.grain}</div></div>
-    <div class="tile"><div class="label">Refresh</div><div class="value" style="font-size:18px">${ds.refresh.frequency}</div><div class="hint">${ds.refresh.mode}</div></div>
-    <div class="tile"><div class="label">Freshness</div><div class="value" style="font-size:18px">${freshDot(ds.freshnessStatus)} ${ds.freshnessStatus === "DELAYED" ? "Delayed" : "On time"}</div><div class="hint">SLA ${sla(ds.refresh.freshnessSlaSeconds)} · last change ${ago(ds.lastDataChangeAt)}</div></div>
-    <div class="tile"><div class="label">Your access</div><div class="value" style="font-size:18px">${ds.myAccess.canExport ? "Granted" : "Approval needed"}</div><div class="hint">${u.exports || 0} exports · ${u.approvedConsumers || 0} approved consumers · ${u.pendingRequests || 0} pending</div></div></div>`);
+  const locked = isLocked(ds);
+  const exp = canExport();
+  setHTML($("#dsTiles", el), html`<div class="kpis">
+    ${kpiCard({ label: "Records", value: ds.recordCount == null ? "–" : fmtNum(ds.recordCount), hint: ds.grain })}
+    ${kpiCard({ label: "Refresh", value: html`<span style="font-size:18px">${ds.refresh.frequency || "–"}</span>`, hint: ds.refresh.mode })}
+    ${kpiCard({ label: "Freshness", value: html`<span style="font-size:18px">${ds.freshnessStatus === "DELAYED" ? "Delayed" : "On time"}</span>`, state: ds.freshnessStatus === "DELAYED" ? "breach" : ds.freshnessStatus ? "ok" : "info", hint: `SLA ${sla(ds.refresh.freshnessSlaSeconds)} · last change ${ago(ds.lastDataChangeAt)}` })}
+    ${kpiCard({ label: "Your access", value: html`<span style="font-size:18px">${locked ? "Locked" : exp ? "Preview + export" : "Preview only"}</span>`, state: locked ? "breach" : "ok",
+      hint: locked ? (ds.lockedReason || "Request access below") : `${u.exports || 0} exports · ${u.approvedConsumers || 0} approved · ${u.pendingRequests || 0} pending` })}</div>`);
+  setHTML($("#dsLock", el), locked ? html`<div class="lock-panel section-gap"><h2>${LOCK} You don't have access to this dataset yet</h2>
+    <p>${ds.lockedReason || "Your roles do not include this dataset's domain."} You can read its definition and lineage. Ask the owner${ds.owner ? html` (<a href="mailto:${ds.owner.email}">${ds.owner.name || ds.owner.email}</a>)` : ""} for access with the form below; a data steward approves it.</p>
+    <div id="lockForm"></div></div>` : "");
+  if (locked) requestForm($("#lockForm", el), el);
+  renderTabs(el, id);
   renderTab(el);
+}
+
+/** Export needs DataMart.Export; external users may export their own rows (contract §5). */
+function canExport() {
+  const p = me();
+  if (!p) return false;
+  if (isLocked(ds)) return false;
+  if (ds.myAccess && ds.myAccess.canExport === false && !isExternal(p)) return false;
+  return Boolean(p.canExport || isExternal(p));
 }
 
 function renderTab(el) {
@@ -212,6 +283,7 @@ function schema(host) {
 /* ---------- lineage (SVG, left → right by stage) ---------- */
 function lineage(host) {
   const { nodes, edges } = ds.lineage;
+  if (!nodes.length) { setHTML(host, html`<div class="card empty">No lineage published for this dataset</div>`); return; }
   const stages = [...new Set(nodes.map(n => n.stage))].sort((a, b) => a - b);
   const W = 170, NH = 56, GX = 46, GY = 16, PAD = 14;
   const cols = stages.map(s => nodes.filter(n => n.stage === s));
@@ -318,17 +390,22 @@ function cell(v) {
 
 /* ---------- export ---------- */
 function exportTab(host) {
-  const blocked = !ds.myAccess.canExport;
+  const blocked = !canExport();
+  const p = me();
+  const why = !p.canExport && !isExternal(p)
+    ? html`Your roles allow <strong>preview only</strong>. Exporting needs the <span class="mono">DataMart.Export</span> app role - ask your manager or a data mart admin.`
+    : html`This dataset is <strong>${ds.classification}</strong>. Request access on the <a href="#/marketplace/${encodeURIComponent(ds.id)}/access">Access</a> tab; the owner must approve it before you can export.`;
   setHTML(host, html`<div class="grid grid-2">
     <div class="card"><h2>Retrieve / export</h2>
-      ${blocked ? html`<div class="notice">This dataset is <strong>${ds.classification}</strong>. Request access on the <a href="#/marketplace/${encodeURIComponent(ds.id)}/access">Access</a> tab; the owner must approve it before you can export.</div>` : ""}
+      ${blocked ? html`<div class="notice">${why}</div>` : ""}
+      ${isExternal(p) ? html`<div class="notice ok section-gap">Exports contain only your organisation's rows${rowScoped(ds) ? "" : " (this dataset is a shared catalogue)"}.</div>` : ""}
       <div class="fields section-gap">${filterFields()}
         <div class="field"><label for="ex-format">Format</label><select id="ex-format">${ds.formats.map(f => html`<option value="${f}">${{ csv: "CSV (Excel-friendly)", json: "JSON (with metadata)", ndjson: "NDJSON (one JSON per line)", xlsx: "Excel workbook (.xlsx)" }[f] || f}</option>`)}</select></div>
         <div class="field"><label for="ex-limit">Max rows</label><input id="ex-limit" type="number" min="1" max="${ds.maxExportRows}" value="10000"></div>
       </div>
       <h3 class="section-gap">Fields <button class="btn sm" id="exAll" type="button">All</button> <button class="btn sm" id="exNone" type="button">None</button></h3>
       <div class="field-checks">${ds.schema.map(f => html`<label class="check"><input type="checkbox" data-field="${f.name}" checked> <span class="mono small">${f.name}</span>${f.pii ? html` <span class="badge sev-WARNING">PII</span>` : ""}</label>`)}</div>
-      <div class="row section-gap"><button class="btn primary" id="exRun" ${blocked ? raw("disabled") : ""}>Download</button>
+      <div class="row section-gap"><button class="btn primary" id="exRun" ${blocked ? raw("disabled") : ""} ${blocked ? raw('title="Export not permitted for your account"') : ""}>Download</button>
         <span class="small muted">The request is audited (who, what, filters, rows).</span></div>
       <div id="exOut"></div>
     </div>
@@ -342,9 +419,9 @@ function exportTab(host) {
     const q = new URLSearchParams({ ...readFilters(host), format: $("#ex-format", host).value, limit: $("#ex-limit", host).value });
     if (fields.length !== ds.schema.length) q.set("fields", fields.join(","));
     btn.disabled = true;
-    const r = await download("exp", `/marketplace/v1/datasets/${encodeURIComponent(ds.id)}/export?${q}`, { headers: H() });
+    const r = await download("exp", `/marketplace/v1/datasets/${encodeURIComponent(ds.id)}/export?${q}`);
     btn.disabled = false;
-    if (!r.ok) { setHTML($("#exOut", host), errorBox({ message: (r.problem && (r.problem.detail || r.problem.title)) || `HTTP ${r.status}`, details: [] })); return; }
+    if (!r.ok) { setHTML($("#exOut", host), errorBox({ status: r.status, message: (r.problem && (r.problem.detail || r.problem.title)) || `HTTP ${r.status}`, details: [] })); return; }
     const a = document.createElement("a");
     a.href = URL.createObjectURL(r.blob); a.download = r.filename; document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 2000);
@@ -357,6 +434,7 @@ function exportTab(host) {
 async function loadHistory(host) {
   try {
     const r = await mp("/exports", { query: { datasetId: ds.id } });
+    r.items = r.items.filter(x => matchesUser(x.requester));
     setHTML($("#exHist", host), r.items.length ? html`<div class="table-wrap"><table class="dense"><thead><tr><th>When</th><th>Who</th><th>Format</th><th class="num">Rows</th><th>Filters</th></tr></thead>
       <tbody>${r.items.map(x => html`<tr><td class="nowrap small">${fmtDate(x.createdAt)}</td><td class="small">${x.requester}</td><td>${x.format}</td><td class="num">${fmtNum(x.rowCount)}</td>
         <td class="small mono">${Object.entries(x.filters || {}).map(([k, v]) => `${k}=${v}`).join(" ") || "–"}</td></tr>`)}</tbody></table></div>` : html`<div class="empty">No exports yet</div>`);
@@ -364,63 +442,76 @@ async function loadHistory(host) {
 }
 
 /* ---------- access ---------- */
-async function access(host, el) {
-  const me = identity();
-  setHTML(host, html`<div class="grid grid-2">
-    <div class="card"><h2>Request access</h2>
-      <div class="small muted">Policy: ${ds.accessPolicy === "approval" ? `owner approval required (${ds.owner.email})` : "approved automatically for internal consumers"}.</div>
-      <div class="fields section-gap">
-        <div class="field"><label>Requester</label><input value="${me.userId}" disabled></div>
-        <div class="field"><label for="ar-team">Team</label><input id="ar-team" value="${me.team}"></div>
-        <div class="field"><label for="ar-sys">Consuming system</label><input id="ar-sys" placeholder="e.g. Power BI, Databricks job, partner app"></div>
-        <div class="field"><label for="ar-level">Access level</label><select id="ar-level"><option value="EXPORT">Read + export</option><option value="READ">Read (API)</option><option value="SUBSCRIBE">Subscribe to events</option></select></div>
-      </div>
-      <div class="field section-gap"><label for="ar-purpose">Business purpose</label><textarea id="ar-purpose" rows="3" placeholder="What will you use this data for?"></textarea></div>
-      <div class="row section-gap"><button class="btn primary" id="arSend">Submit request</button></div>
+/** Access request form (used on the Access tab and in the lock panel). */
+function requestForm(host, el) {
+  const p = me();
+  setHTML(host, html`
+    <div class="small muted">Policy: ${ds.accessPolicy === "approval" ? `owner approval required${ds.owner ? ` (${ds.owner.email})` : ""}` : "approved automatically for eligible internal consumers"}.</div>
+    <div class="fields section-gap">
+      <div class="field"><label>Requester</label><input value="${p.email || p.id}" disabled></div>
+      <div class="field"><label for="ar-team">Team</label><input id="ar-team" value="${p.department || ""}" placeholder="e.g. Commercial Analytics"></div>
+      <div class="field"><label for="ar-sys">Consuming system</label><input id="ar-sys" placeholder="e.g. Power BI, Databricks job, partner app"></div>
+      <div class="field"><label for="ar-level">Access level</label><select id="ar-level"><option value="EXPORT">Read + export</option><option value="READ">Read (API)</option><option value="SUBSCRIBE">Subscribe to events</option></select></div>
     </div>
-    <div class="card"><h2>Requests for this dataset</h2><div class="small muted">Data owners approve or reject pending requests here.</div><div id="arList" class="section-gap">${loading()}</div></div></div>`);
+    <div class="field section-gap"><label for="ar-purpose">Business purpose</label><textarea id="ar-purpose" rows="3" style="min-height:70px;font-family:inherit" placeholder="What will you use this data for?"></textarea></div>
+    <div class="row section-gap"><button class="btn primary" type="button" id="arSend">Submit request</button></div>`);
   $("#arSend", host).addEventListener("click", async () => {
     const purpose = $("#ar-purpose", host).value.trim();
     if (purpose.length < 3) { toast("Describe the business purpose", "error"); return; }
     try {
-      const r = await mp(`/datasets/${encodeURIComponent(ds.id)}/access-requests`, { body: { purpose, team: $("#ar-team", host).value, consumerSystem: $("#ar-sys", host).value || null, accessLevel: $("#ar-level", host).value } });
-      toast(`Request ${r.requestId}: ${r.status}`);
+      const r = await mp(`/datasets/${encodeURIComponent(ds.id)}/access-requests`, { body: { purpose, team: $("#ar-team", host).value || null, consumerSystem: $("#ar-sys", host).value || null, accessLevel: $("#ar-level", host).value } });
+      toast(`Request ${r.requestId}: ${r.status}`, "ok");
       await loadDetail(el, ds.id);
     } catch (e) { toast(e.message, "error"); }
   });
+}
+
+async function access(host, el) {
+  const p = me();
+  const approver = p.isAdmin || p.isSteward;
+  setHTML(host, html`<div class="grid grid-2">
+    <div class="card"><h2>Request access</h2><div id="arForm"></div></div>
+    <div class="card"><div class="panel-head"><h2>Requests for this dataset</h2>
+      <span class="panel-hint">${approver ? "You can approve or reject pending requests" : "Data stewards approve pending requests"}</span></div>
+      <div id="arList">${loading()}</div></div></div>`);
+  requestForm($("#arForm", host), el);
   try {
-    const r = await mp("/access-requests", { query: { datasetId: ds.id } });
+    const r = await mp("/access-requests", { query: approver ? { datasetId: ds.id } : { datasetId: ds.id, requester: p.email || p.id } });
     const list = $("#arList", host);
-    setHTML(list, r.items.length ? html`<div class="table-wrap"><table class="dense"><thead><tr><th>Request</th><th>Requester</th><th>Purpose</th><th>Status</th><th></th></tr></thead><tbody>
-      ${r.items.map(x => html`<tr><td class="mono small">${x.requestId}<div class="muted">${fmtDate(x.requestedAt)}</div></td>
+    const rows = (r.items || []).filter(x => matchesUser(x.requester));
+    setHTML(list, rows.length ? html`<div class="table-wrap"><table class="dense"><thead><tr><th>Request</th><th>Requester</th><th>Purpose</th><th>Status</th>${approver ? html`<th></th>` : ""}</tr></thead><tbody>
+      ${rows.map(x => html`<tr><td class="mono small">${x.requestId}<div class="muted">${fmtDate(x.requestedAt)}</div></td>
         <td class="small">${x.requester}<div class="muted">${x.team || ""} ${x.consumerSystem ? "· " + x.consumerSystem : ""}</div></td>
         <td class="small">${x.purpose}</td>
-        <td><span class="badge ${x.status === "APPROVED" ? "ok" : x.status === "PENDING" ? "sev-WARNING" : "sev-ERROR"}">${x.status}</span>${x.decidedBy ? html`<div class="small muted">${x.decidedBy}</div>` : ""}</td>
-        <td class="nowrap">${x.status === "PENDING" ? html`<button class="btn sm" data-dec="APPROVED" data-id="${x.requestId}">Approve</button> <button class="btn sm" data-dec="REJECTED" data-id="${x.requestId}">Reject</button>`
-          : x.status === "APPROVED" ? html`<button class="btn sm" data-dec="REVOKED" data-id="${x.requestId}">Revoke</button>` : ""}</td></tr>`)}</tbody></table></div>` : html`<div class="empty">No requests yet</div>`);
+        <td>${statusPill(x.status)}${x.decidedBy ? html`<div class="small muted">${x.decidedBy}</div>` : ""}</td>
+        ${approver ? html`<td class="nowrap">${x.status === "PENDING" ? html`<button class="btn sm" data-dec="APPROVED" data-id="${x.requestId}">Approve</button> <button class="btn sm" data-dec="REJECTED" data-id="${x.requestId}">Reject</button>`
+          : x.status === "APPROVED" ? html`<button class="btn sm" data-dec="REVOKED" data-id="${x.requestId}">Revoke</button>` : ""}</td>` : ""}</tr>`)}</tbody></table></div>` : html`<div class="empty">No requests yet</div>`);
     list.addEventListener("click", async e => {
       const b = e.target.closest("[data-dec]");
       if (!b) return;
-      const note = b.dataset.dec === "APPROVED" ? "Approved by data owner" : prompt("Reason:") || "";
+      const note = b.dataset.dec === "APPROVED" ? "Approved by data steward" : prompt("Reason:") || "";
       try {
-        await mp(`/access-requests/${b.dataset.id}/decision`, { body: { decision: b.dataset.dec, note }, headers: { "x-user-id": ds.owner.email } });
-        toast(`${b.dataset.id} ${b.dataset.dec.toLowerCase()}`);
+        await mp(`/access-requests/${b.dataset.id}/decision`, { body: { decision: b.dataset.dec, note } });
+        toast(`${b.dataset.id} ${b.dataset.dec.toLowerCase()}`, "ok");
         await loadDetail(el, ds.id);
       } catch (err) { toast(err.message, "error"); }
     });
   } catch (e) { setHTML($("#arList", host), errorBox(e)); }
 }
+export const statusPill = st => html`<span class="badge ${st === "APPROVED" ? "ok" : st === "PENDING" ? "sev-WARNING" : "sev-ERROR"}">${st}</span>`;
 
 /* ---------- how to consume ---------- */
 function consume(host) {
   const s = loadSettings();
   const base = new URL(s.apiBase || "/api", location.href).href.replace(/\/$/, "");
   const c = ds.consumption || {};
-  const keyHdr = s.subscriptionKey ? "-H 'Ocp-Apim-Subscription-Key: <key>'" : "-H 'x-api-key: <key>'";
+  const mode = authMode();
+  const keyHdr = [s.subscriptionKey ? "-H 'Ocp-Apim-Subscription-Key: <key>'" : "",
+    mode === "entra" ? "-H 'Authorization: Bearer <Entra access token>'" : mode === "dev" ? `-H 'x-dev-persona: ${me().persona || me().id}'` : "-H 'x-api-key: <key>'"].filter(Boolean).join(" ");
   const exportUrl = `${base}/exp/marketplace/v1/datasets/${ds.id}/export?format=csv`;
   setHTML(host, html`<div class="grid grid-2">
     <div class="card"><h2>Marketplace API</h2>
-      <pre class="json">${`# Retrieve the whole dataset as CSV (audited)\ncurl ${keyHdr} -H 'x-user-id: ${identity().userId}' \\\n  '${exportUrl}' -o ${ds.id}.csv\n\n# Preview / data definition / lineage\nGET ${base}/exp/marketplace/v1/datasets/${ds.id}/preview?limit=20\nGET ${base}/exp/marketplace/v1/datasets/${ds.id}/schema\nGET ${base}/exp/marketplace/v1/datasets/${ds.id}/lineage`}</pre>
+      <pre class="json">${`# Retrieve the whole dataset as CSV (audited)\ncurl ${keyHdr} \\\n  '${exportUrl}' -o ${ds.id}.csv\n\n# Preview / data definition / lineage\nGET ${base}/exp/marketplace/v1/datasets/${ds.id}/preview?limit=20\nGET ${base}/exp/marketplace/v1/datasets/${ds.id}/schema\nGET ${base}/exp/marketplace/v1/datasets/${ds.id}/lineage`}</pre>
       <h3 class="section-gap">Source APIs</h3>
       <div class="table-wrap"><table><tbody>${(c.rest || []).map(r => html`<tr><td><span class="badge">${r.method}</span></td><td class="mono small">${base}${r.path}</td><td class="small">${r.description}</td></tr>`)}</tbody></table></div>
     </div>
