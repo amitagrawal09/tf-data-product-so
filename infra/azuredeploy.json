@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.49.2.45890",
-      "templateHash": "4514213180662588365"
+      "templateHash": "4653924060265599503"
     }
   },
   "parameters": {
@@ -116,6 +116,41 @@
     "d365Company": {
       "type": "string",
       "defaultValue": "usmf"
+    },
+    "entraTenantId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Entra ID tenant id for single sign-on. Leave the Entra values empty for dev personas (non-prod only); prod requires them - run scripts/entra-setup.sh first."
+      }
+    },
+    "entraApiClientId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Client id of the \"Taylor Farms Data Mart API\" app registration (from scripts/entra-setup.sh)"
+      }
+    },
+    "entraSpaClientId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Client id of the \"Taylor Farms Data Mart Console\" SPA app registration (from scripts/entra-setup.sh)"
+      }
+    },
+    "entraExternalIssuer": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional Entra External ID issuer for customer and vendor sign-in"
+      }
+    },
+    "entraExternalAuthority": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional Entra External ID authority for the console, https://<tenant>.ciamlogin.com/<tenant-id>"
+      }
     },
     "forceUpdateTag": {
       "type": "string",
@@ -354,6 +389,21 @@
           "d365Company": {
             "value": "[parameters('d365Company')]"
           },
+          "entraTenantId": {
+            "value": "[parameters('entraTenantId')]"
+          },
+          "entraApiClientId": {
+            "value": "[parameters('entraApiClientId')]"
+          },
+          "entraSpaClientId": {
+            "value": "[parameters('entraSpaClientId')]"
+          },
+          "entraExternalIssuer": {
+            "value": "[parameters('entraExternalIssuer')]"
+          },
+          "entraExternalAuthority": {
+            "value": "[parameters('entraExternalAuthority')]"
+          },
           "forceUpdateTag": {
             "value": "[parameters('forceUpdateTag')]"
           }
@@ -365,7 +415,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.49.2.45890",
-              "templateHash": "9702689551089646433"
+              "templateHash": "7377783682840646314"
             }
           },
           "parameters": {
@@ -419,6 +469,26 @@
             },
             "forceUpdateTag": {
               "type": "string"
+            },
+            "entraTenantId": {
+              "type": "string",
+              "defaultValue": ""
+            },
+            "entraApiClientId": {
+              "type": "string",
+              "defaultValue": ""
+            },
+            "entraSpaClientId": {
+              "type": "string",
+              "defaultValue": ""
+            },
+            "entraExternalIssuer": {
+              "type": "string",
+              "defaultValue": ""
+            },
+            "entraExternalAuthority": {
+              "type": "string",
+              "defaultValue": ""
             },
             "deployerIdentityId": {
               "type": "string",
@@ -493,7 +563,8 @@
               }
             ],
             "tokenEnv": "[if(empty(parameters('gitHubToken')), createArray(), createArray(createObject('name', 'REPO_TOKEN', 'secureValue', parameters('gitHubToken'))))]",
-            "d365Env": "[if(empty(parameters('d365Url')), createArray(), createArray(createObject('name', 'D365_URL', 'value', parameters('d365Url')), createObject('name', 'D365_TENANT_ID', 'value', parameters('d365TenantId')), createObject('name', 'D365_CLIENT_ID', 'value', parameters('d365ClientId')), createObject('name', 'D365_CLIENT_SECRET', 'secureValue', parameters('d365ClientSecret'))))]"
+            "d365Env": "[if(empty(parameters('d365Url')), createArray(), createArray(createObject('name', 'D365_URL', 'value', parameters('d365Url')), createObject('name', 'D365_TENANT_ID', 'value', parameters('d365TenantId')), createObject('name', 'D365_CLIENT_ID', 'value', parameters('d365ClientId')), createObject('name', 'D365_CLIENT_SECRET', 'secureValue', parameters('d365ClientSecret'))))]",
+            "entraEnv": "[concat(if(empty(parameters('entraTenantId')), createArray(), createArray(createObject('name', 'TFSO_ENTRA_TENANT_ID', 'value', parameters('entraTenantId')))), if(empty(parameters('entraApiClientId')), createArray(), createArray(createObject('name', 'TFSO_ENTRA_API_CLIENT_ID', 'value', parameters('entraApiClientId')))), if(empty(parameters('entraSpaClientId')), createArray(), createArray(createObject('name', 'TFSO_ENTRA_SPA_CLIENT_ID', 'value', parameters('entraSpaClientId')))), if(empty(parameters('entraExternalIssuer')), createArray(), createArray(createObject('name', 'TFSO_ENTRA_EXTERNAL_ISSUER', 'value', parameters('entraExternalIssuer')))), if(empty(parameters('entraExternalAuthority')), createArray(), createArray(createObject('name', 'TFSO_ENTRA_EXTERNAL_AUTHORITY', 'value', parameters('entraExternalAuthority')))))]"
           },
           "resources": [
             {
@@ -515,7 +586,7 @@
                 "retentionInterval": "P1D",
                 "cleanupPreference": "OnSuccess",
                 "forceUpdateTag": "[parameters('forceUpdateTag')]",
-                "environmentVariables": "[concat(variables('baseEnv'), variables('tokenEnv'), variables('d365Env'))]",
+                "environmentVariables": "[concat(variables('baseEnv'), variables('tokenEnv'), variables('d365Env'), variables('entraEnv'))]",
                 "scriptContent": "[variables('$fxv#0')]"
               }
             }
