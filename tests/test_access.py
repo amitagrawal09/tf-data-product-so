@@ -227,3 +227,8 @@ async def test_entra_bearer_tokens_are_validated(tmp_path):
         assert (await c.get("/v1/masterdata/items")).status_code == 401              # no token
         assert (await c.get("/v1/masterdata/items", headers={"x-dev-persona": "admin"})).status_code == 401  # no dev bypass
         assert (await c.get("/v1/masterdata/items", headers={"x-api-key": "svc"})).status_code == 200      # service identity
+
+
+async def test_locked_cards_do_not_disclose_counts(h):
+    by = {d["id"]: d for d in (await h.exp.get("/marketplace/v1/datasets", headers=P("sales.analyst"))).json()["items"]}
+    assert by["ap-invoices"]["recordCount"] is None and by["items"]["recordCount"] == 9

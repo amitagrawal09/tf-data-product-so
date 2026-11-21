@@ -82,7 +82,7 @@ async function route() {
 
 /** "LOCAL · Last 30 d · National (all regions)" - shared page subtitle. */
 export function subtitle() {
-  return `${environmentName()} · ${rangeLabel()} · ${scopeLabel()}`;
+  return `${environmentName()} · ${rangeLabel()} · ${isExternal() ? "Your organisation's rows" : scopeLabel()}`;
 }
 
 /* ---------- navigation ---------- */

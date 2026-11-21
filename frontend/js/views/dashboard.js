@@ -24,17 +24,17 @@ export async function mount(el) {
       </div>
     </div>
     <div id="kpis">${loading("Loading KPIs…")}</div>
+    <div class="card section-gap"><div class="panel-head"><h2>${perfTitle}</h2>
+      ${s.region || s.site ? html`<button class="btn sm" id="upScope">${s.site ? "↑ Whole region" : "↑ National"}</button>` : html`<span class="panel-hint">Select a row to drill in</span>`}</div>
+      <div id="perf">${loading()}</div></div>
     <div class="grid grid-2 section-gap">
-      <div class="card"><div class="panel-head"><h2>${perfTitle}</h2>
-        ${s.region || s.site ? html`<button class="btn sm" id="upScope">${s.site ? "↑ Whole region" : "↑ National"}</button>` : html`<span class="panel-hint">Select a row to drill in</span>`}</div>
-        <div id="perf">${loading()}</div></div>
       <div class="card"><div class="panel-head"><h2>Orders at risk</h2><span id="riskTotals" class="panel-hint"></span></div>
         <div class="panel-hint" style="margin:-6px 0 8px">Open orders likely to miss the customer promise. Act on these first.</div>
         <div id="risk">${loading()}</div></div>
-    </div>
-    <div class="grid grid-2 section-gap">
-      <div class="card"><div class="panel-head"><h2>Most active customers</h2><span class="panel-hint" id="custHint">${rangeLabel()}</span></div><div id="customers">${loading()}</div></div>
-      <div class="card"><div class="panel-head"><h2>Pipeline by status</h2><span class="panel-hint">Current open and closed orders</span></div><div id="byCat">${loading()}</div></div>
+      <div>
+        <div class="card"><div class="panel-head"><h2>Most active customers</h2><span class="panel-hint" id="custHint">${rangeLabel()}</span></div><div id="customers">${loading()}</div></div>
+        <div class="card section-gap"><div class="panel-head"><h2>Pipeline by status</h2><span class="panel-hint">Orders by status category</span></div><div id="byCat">${loading()}</div></div>
+      </div>
     </div>
     <div class="card section-gap">
       <div class="panel-head"><h2>Recent orders</h2><a class="small" href="#/orders">All orders →</a></div>
@@ -237,12 +237,12 @@ async function loadOrders(el) {
     if (!recent.length) { setHTML(host, html`<div class="empty">No orders in this scope and range${me() && me().canOperateOrders ? html` – <a href="#/new">create one</a>` : ""}.</div>`); return; }
     setHTML(host, limitedTable(html`<tr><th>Order</th><th>Status</th><th>Channel</th><th>Customer</th><th>PO</th><th>Region</th><th>Site</th><th>Received</th><th class="num">Total</th></tr>`,
       recent.map(o => html`<tr class="clickable" data-id="${o.orderId}">
-        <td class="mono"><a href="#/orders/${encodeURIComponent(o.orderId)}">${o.orderId}</a></td>
+        <td class="mono nowrap"><a href="#/orders/${encodeURIComponent(o.orderId)}">${o.orderId}</a></td>
         <td>${statusBadge(o.status, o.statusCategory)}</td><td>${o.sourceChannel || ""}</td>
         <td>${o.customerName || o.customerId || ""}${o.accountScope === "NATIONAL" ? html` <span class="tag">National</span>` : ""}</td>
-        <td class="mono small">${o.customerPo || "–"}</td>
+        <td class="mono small nowrap">${o.customerPo || "–"}</td>
         <td>${o.regionName || regionName(o.region) || "–"}${o.crossRegion ? html` <span class="tag" title="Shipped from outside the home region">cross-region</span>` : ""}</td>
-        <td class="small mono">${o.shipFromWarehouse || "–"}</td>
+        <td class="small mono nowrap">${o.shipFromWarehouse || "–"}</td>
         <td class="nowrap">${fmtDate(o.receivedAt)}</td><td class="num mono">${fmtMoney(o.totalAmount, o.currency)}</td></tr>`), { limit: 10 }));
     wireLimited(host);
     host.querySelectorAll("tr.clickable").forEach(tr => tr.addEventListener("click", e => {

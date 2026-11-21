@@ -197,7 +197,7 @@ function shell(body) {
   setHTML(host, html`
     <header class="signin-top">
       <span class="wordmark" aria-hidden="true"><span class="wm-taylor">Taylor</span><span class="wm-farms">FARMS</span></span>
-      <span class="brand-text"><strong>Enterprise Data Mart</strong><small>Taylor Farms · Sales Order data product</small></span>
+      <span class="brand-text"><strong>Enterprise Data Mart</strong><small>Taylor Farms · Sales, Supply Chain &amp; Finance data</small></span>
       <span class="env-chip" style="margin-left:auto">${env}</span>
     </header>
     <div class="signin-main"><div class="signin-card">
@@ -246,7 +246,7 @@ async function devSignIn() {
         <span class="p-title">${p.title || ""}${p.userType === "external" ? " · external" : ""}</span>
         <span class="small muted" style="display:block;overflow-wrap:anywhere">${p.email || p.id}</span>
         <span class="p-roles">${(p.roles || []).map(roleTag)}</span>
-        ${scopeText(p.scope) ? html`<span class="small" style="display:block;margin-top:4px">Row scope: <strong>${scopeText(p.scope)}</strong></span>` : ""}</span>
+        ${scopeText(p.scope) ? html`<span class="p-scope">Row scope: <strong>${scopeText(p.scope)}</strong></span>` : ""}</span>
     </button>`)}`);
   return new Promise(resolve => {
     grid.addEventListener("click", e => {

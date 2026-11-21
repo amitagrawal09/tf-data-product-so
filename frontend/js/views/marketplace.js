@@ -116,7 +116,7 @@ async function load(el, first = false) {
       ${kpiCard({ label: "Datasets", value: fmtNum(all.total ?? list.length), hint: `${(all.domains || []).length} domains` })}
       ${kpiCard({ label: "Accessible to you", value: fmtNum(open.length), state: open.length ? "ok" : "breach", hint: list.length - open.length ? `${list.length - open.length} locked · request access` : "Everything listed is open to you" })}
       ${kpiCard({ label: "Certified products", value: fmtNum(list.filter(d => d.certified).length), hint: "Contract-governed output ports" })}
-      ${kpiCard({ label: "Records available", value: fmtNum(total), hint: isExternal(p) ? "Your rows only" : "Live from the APIs" })}
+      ${kpiCard({ label: "Records available", value: open.some(d => d.recordCount == null) && !total ? "–" : fmtNum(total), hint: open.some(d => d.rowScoped) ? "Scoped to your access - counts shown in preview" : "Live from the APIs" })}
       ${!isExternal(p) ? kpiCard({ label: "Exports (audited)", value: fmtNum(exports), hint: p && p.canExport ? "You can export" : "Preview only (no DataMart.Export)" }) : ""}
     </div>`);
     $("#cls", el).insertAdjacentHTML("beforeend", (all.classifications || []).map(c => `<option>${esc(c)}</option>`).join(""));

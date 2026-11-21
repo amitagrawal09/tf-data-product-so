@@ -415,7 +415,7 @@ def build_router(process: ServiceClient, system: ServiceClient) -> APIRouter:
     def card(ds: dict, facts: dict, user: Principal) -> dict:
         reason = locked_reason(ds, user)
         live = dict(facts.get(ds["id"], {}))
-        if user.is_external or (user.regions and not user.is_service):
+        if reason or user.is_external or (user.regions and not user.is_service):
             live["recordCount"] = None  # totals across other accounts / regions are not disclosed
             live.pop("usage", None)
         return {k: ds[k] for k in ("id", "name", "object", "domain", "domainId", "type", "version", "classification",

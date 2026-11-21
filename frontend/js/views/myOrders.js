@@ -45,7 +45,7 @@ export async function mount(el, id, qs) {
     </div>`);
     setHTML(host, list.length ? limitedTable(html`<tr><th>Order</th><th>Your PO</th><th>Status</th><th>Ship to</th><th>Requested delivery</th><th>Received</th><th class="num">Total</th></tr>`,
       list.map(o => html`<tr class="clickable" tabindex="0" data-id="${o.orderId}">
-        <td class="mono"><a href="#/my-orders/${encodeURIComponent(o.orderId)}">${o.orderId}</a></td>
+        <td class="mono nowrap"><a href="#/my-orders/${encodeURIComponent(o.orderId)}">${o.orderId}</a></td>
         <td class="mono small">${o.customerPo || "–"}</td><td>${statusBadge(o.status, o.statusCategory)}</td>
         <td class="small">${o.shipToName || o.shipToId || "–"}</td>
         <td class="nowrap">${fmtDate(o.requestedDeliveryDate)}</td><td class="nowrap small">${fmtDate(o.receivedAt)}</td>

@@ -90,6 +90,8 @@ def create_experience_app(settings: Settings | None = None) -> FastAPI:
             if not user.is_steward:
                 raise forbid("Access administration requires DataMart.Admin or DataMart.Steward")
             return
+        if path == "/portal/v1/catalog/regions":
+            return  # operating regions are reference data for every signed-in user
         if path.startswith("/portal/v1/"):
             if user.is_external_customer:
                 return  # row-level checks in each route
