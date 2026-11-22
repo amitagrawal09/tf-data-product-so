@@ -517,3 +517,10 @@ table.matrix th.cell { white-space: normal; min-width: 76px; }
   .persona-grid { grid-template-columns: minmax(0, 1fr); }
   .ds-grid { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* Settings → Single sign-on wizard */
+.sso-step h2 { display: flex; align-items: center; gap: 10px; }
+.step-no { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--accent-strong); color: #fff; font-size: 13px; font-weight: 700; flex: none; }
+.sso-step ol.steps { margin: 8px 0 0; padding-left: 20px; display: grid; gap: 8px; }
+.copy-box { background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; overflow-wrap: anywhere; }
+.sso-step textarea { width: 100%; font-family: var(--mono, ui-monospace, monospace); font-size: 12px; }

@@ -12,6 +12,8 @@
 #   ./deploy.sh smoke [URL]   run the smoke test against an API base URL
 #   ./deploy.sh demo-data     load demo orders across all regions / channels (after local or docker)
 #   ./deploy.sh destroy       delete the Azure resource group (asks for confirmation)
+#   ./deploy.sh sso-reset [azure]  break-glass: discard single sign-on settings saved in the console
+#                             (Settings → Single sign-on) and return to this deployment's sign-in settings
 #   ./deploy.sh --help
 # =====================================================================================
 set -euo pipefail
@@ -654,6 +656,35 @@ azure_destroy() {
   ok "Deletion of $RG started (Key Vault and APIM are soft-deleted; purge them to reuse names)"
 }
 
+# Break-glass for Settings → Single sign-on: deletes the active record with the service identity, so the APIs fall
+# back to the deployment's TFSO_AUTH_MODE / TFSO_ENTRA_* settings within ~10 seconds. Never needs a user sign-in.
+sso_reset() {
+  ensure_python
+  local target="${1:-local}" url header
+  if [[ "$target" == "azure" ]]; then
+    need az
+    DEPLOYMENT_NAME="tfso-${ENVIRONMENT}"
+    local apim_name apim_url sub_id
+    apim_name="$(deployment_output apimName)"; apim_url="$(deployment_output apimGatewayUrl)"
+    sub_id="$(az account show --query id -o tsv)"
+    header="Ocp-Apim-Subscription-Key: $(az rest --method post --url "https://management.azure.com/subscriptions/${sub_id}/resourceGroups/${RG}/providers/Microsoft.ApiManagement/service/${apim_name}/subscriptions/platform-service/listSecrets?api-version=2022-08-01" --query primaryKey -o tsv)"
+    url="${apim_url}/process/v1/sso/active"
+  else
+    header="x-api-key: ${LOCAL_API_KEY}"
+    url="${2:-http://localhost:8080/api}/process/v1/sso/active"
+  fi
+  step "Resetting single sign-on to the deployment settings (${target})"
+  "$VENV_PY" - "$url" "$header" <<'PY' || die "Reset failed - is the Process API reachable?"
+import sys, urllib.request
+url, header = sys.argv[1], sys.argv[2]
+k, v = header.split(": ", 1)
+req = urllib.request.Request(url, method="DELETE", headers={k: v})
+with urllib.request.urlopen(req, timeout=20) as r:
+    print(f"HTTP {r.status}")
+PY
+  ok "Single sign-on settings from the console removed; the services use the deployment settings within ~10 s"
+}
+
 run_tests() {
   ensure_python
   step "Running tests"
@@ -676,6 +707,7 @@ main() {
     smoke)        ensure_python; run_smoke "${1:-http://localhost:8080/api}" --api-key "$LOCAL_API_KEY" ;;
     demo-data)    ensure_python; step "Loading demo orders across all regions"
                   "$VENV_PY" -m tfso.tools.seed_demo --base "${1:-http://localhost:8080/api}" --api-key "$LOCAL_API_KEY" ;;
+    sso-reset)    sso_reset "$@" ;;
     -h|--help|help|"") usage ;;
     *)            usage; die "unknown command: $cmd" ;;
   esac

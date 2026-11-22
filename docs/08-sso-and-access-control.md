@@ -214,6 +214,8 @@ Non-prod Azure environments without Entra settings also deploy in `dev` mode. An
 
 ## 7. Step-by-step setup
 
+> **Prefer the console?** An administrator can connect Entra ID from **Settings → Single sign-on** without a redeploy: [docs/09-connect-entra-id.md](09-connect-entra-id.md). This section is the scripted and deployment-time route.
+
 ### 7.1 Prerequisites
 
 - An Entra ID account that can create app registrations and grant admin consent (Cloud Application Administrator plus Privileged Role Administrator, or Global Administrator).

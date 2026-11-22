@@ -4,11 +4,14 @@
 //           workforce tenant and, optionally, Entra External ID for customers / vendors. Access token sent as
 //           Authorization: Bearer and refreshed 60 s before it expires.
 //   apikey→ legacy: no user sign-in (the gateway / config supplies a key).
+// The mode and Entra identifiers come from the server (GET /exp/auth/v1/config), which an administrator changes in
+// Settings → Single sign-on; config.js only supplies defaults for values the server does not provide.
 import { html, raw, setHTML, errorBox } from "./ui.js";
 
 const PERSONA_KEY = "tfso.persona";
 const TOKEN_KEY = "tfso.token";       // {access_token, refresh_token, expires_at, authority, clientId, scopes}
-const PKCE_KEY = "tfso.pkce";         // {verifier, state, authority, clientId, scopes, returnHash}
+const PKCE_KEY = "tfso.pkce";         // {verifier, state, authority, clientId, scopes, returnHash, test?}
+const TEST_KEY = "tfso.sso.test";     // result of a Settings → Single sign-on test sign-in {access_token, at} | {error}
 
 const ss = {
   get(k) { try { return JSON.parse(sessionStorage.getItem(k) || "null"); } catch { return null; } },
@@ -18,7 +21,10 @@ const ss = {
 
 /** Effective auth configuration (contract §7) with safe defaults. */
 export function authConfig() {
-  const cfg = (window.TFSO_CONFIG && window.TFSO_CONFIG.auth) || {};
+  const local = (window.TFSO_CONFIG && window.TFSO_CONFIG.auth) || {};
+  const server = window.TFSO_SERVER_AUTH || {};
+  const cfg = { ...local };
+  for (const [k, v] of Object.entries(server)) if (v !== "" && v !== null && v !== undefined && !(Array.isArray(v) && !v.length)) cfg[k] = v;
   const here = location.origin + location.pathname;
   const mode = String(cfg.mode || "dev").toLowerCase();
   const tenant = cfg.tenantId || "";
@@ -36,6 +42,18 @@ export function authConfig() {
   };
 }
 export function authMode() { return authConfig().mode; }
+
+/** Ask the backend how users sign in (public endpoint). Falls back to config.js when unreachable. */
+export async function loadServerAuth() {
+  try {
+    const s = (await import("./api.js")).loadSettings();
+    const headers = { Accept: "application/json" };
+    if (s.subscriptionKey) headers["Ocp-Apim-Subscription-Key"] = s.subscriptionKey;
+    const res = await fetch(`${s.apiBase}/exp/auth/v1/config`, { headers, cache: "no-store" });
+    if (res.ok) window.TFSO_SERVER_AUTH = await res.json();
+  } catch { /* offline or older backend: config.js decides */ }
+  return window.TFSO_SERVER_AUTH || null;
+}
 export function currentPersona() { return ss.get(PERSONA_KEY); }
 
 /* ---------- request headers ---------------------------------------------------------- */
@@ -98,6 +116,48 @@ async function startEntraSignIn(external = false) {
     state, prompt: "select_account",
   });
   location.assign(`${authority}/oauth2/v2.0/authorize?${q}`);
+}
+
+/**
+ * Settings → Single sign-on → Test sign-in: sign in against a *draft* configuration without changing the current
+ * session. The access token comes back to Settings, which sends it to POST /admin/v1/sso/verify.
+ */
+export async function startTestSignIn(pub) {
+  const authority = String(pub.authority || "").replace(/\/+$/, "");
+  if (!authority || !pub.clientId) throw new Error("Save the tenant and console application IDs first.");
+  const verifier = randomString(48);
+  const state = randomString(16);
+  ss.del(TEST_KEY);
+  ss.set(PKCE_KEY, { verifier, state, authority, clientId: pub.clientId, scopes: pub.scopes, returnHash: "#/settings", test: true });
+  const q = new URLSearchParams({
+    client_id: pub.clientId, response_type: "code", redirect_uri: authConfig().redirectUri, response_mode: "query",
+    scope: pub.scopes.join(" "), code_challenge: await challenge(verifier), code_challenge_method: "S256",
+    state, prompt: "select_account",
+  });
+  location.assign(`${authority}/oauth2/v2.0/authorize?${q}`);
+}
+/** Result of the last test sign-in (consumed once). */
+export function takeTestSignIn() { const t = ss.get(TEST_KEY); ss.del(TEST_KEY); return t; }
+
+/** Finish a *test* sign-in redirect, whatever the current mode. Returns true when it handled the URL. */
+async function completeTestRedirect() {
+  const p = new URLSearchParams(location.search);
+  const pkce = ss.get(PKCE_KEY);
+  if (!pkce || !pkce.test || (!p.has("code") && !p.has("error"))) return false;
+  ss.del(PKCE_KEY);
+  history.replaceState(null, "", location.pathname + pkce.returnHash);
+  if (p.has("error")) { ss.set(TEST_KEY, { error: p.get("error_description") || p.get("error") }); return true; }
+  if (p.get("state") !== pkce.state) { ss.set(TEST_KEY, { error: "State mismatch - start the test again." }); return true; }
+  try {
+    const data = await tokenRequest(pkce.authority, {
+      client_id: pkce.clientId, grant_type: "authorization_code", code: p.get("code"),
+      redirect_uri: authConfig().redirectUri, code_verifier: pkce.verifier, scope: pkce.scopes.join(" "),
+    });
+    ss.set(TEST_KEY, { access_token: data.access_token, at: Date.now() });
+  } catch (e) {
+    ss.set(TEST_KEY, { error: e.message });
+  }
+  return true;
 }
 
 async function tokenRequest(authority, form) {
@@ -221,7 +281,7 @@ async function devSignIn() {
   const host = shell(html`${reasonNotice()}
     <div class="row" style="gap:12px;align-items:center">
       <button class="ms-btn" disabled title="Single sign-on is used in Azure environments (auth.mode = entra)">${msLogo} Sign in with Microsoft</button>
-      <span class="small muted">Entra ID single sign-on is enabled in Azure environments. This environment runs in <span class="mono">dev</span> mode.</span>
+      <span class="small muted">Single sign-on is not enabled yet. An administrator can connect Microsoft Entra ID in <strong>Settings → Single sign-on</strong>.</span>
     </div>
     <div class="divider">or choose a test persona</div>
     <div class="small muted">Each persona carries the Entra ID app roles and row scope it would get in production. The persona is sent as <span class="mono">x-dev-persona</span>.</div>
@@ -290,6 +350,8 @@ function entraSignIn(err) {
  * sign-in page (and, for Entra, redirects away).
  */
 export async function initAuth() {
+  await loadServerAuth();
+  await completeTestRedirect();
   const mode = authMode();
   if (mode === "apikey") return true;
   if (mode === "dev") {
@@ -303,7 +365,9 @@ export async function initAuth() {
     return entraSignIn(e);
   }
   const t = ss.get(TOKEN_KEY);
-  if (t && t.access_token) {
+  if (t && t.clientId && t.clientId !== authConfig().clientId && t.clientId !== authConfig().externalClientId) {
+    ss.del(TOKEN_KEY); // single sign-on was reconfigured in Settings
+  } else if (t && t.access_token) {
     if (t.expires_at - Date.now() > 60_000) { scheduleRefresh(); return true; }
     if (t.refresh_token) { try { await refreshToken(); return true; } catch { /* fall through */ } }
   }

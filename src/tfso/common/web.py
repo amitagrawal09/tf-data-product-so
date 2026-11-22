@@ -1,9 +1,11 @@
 """FastAPI app factory: correlation ids, RFC 7807 problems, auth, structured logging, telemetry."""
 from __future__ import annotations
 
+import asyncio
 import contextvars
 import json
 import logging
+import os
 import sys
 import time
 import uuid
@@ -19,7 +21,7 @@ from .config import Settings
 from .identity import Principal
 
 correlation_id_var: contextvars.ContextVar[str] = contextvars.ContextVar("correlation_id", default="")
-PUBLIC_PATHS = ("/health", "/docs", "/redoc", "/openapi.json")
+PUBLIC_PATHS = ("/health", "/docs", "/redoc", "/openapi.json", "/auth/v1/config")
 
 
 def correlation_id() -> str:
@@ -82,14 +84,38 @@ class Authenticator:
     PUBLIC_DEV_PATHS = ("/auth/v1/personas",)
 
     def __init__(self, settings: Settings):
+        from .sso import from_env
         self.settings = settings
         self._jwks: dict[str, Any] = {}
         if settings.auth_mode == "dev" and settings.is_prod:
             raise RuntimeError("TFSO_AUTH_MODE=dev is not allowed when TFSO_ENV=prod - configure Entra ID (entra)")
+        self.env_sso = from_env(settings)
+        self.sso = self.env_sso          # effective configuration (environment + Settings record)
+        self.source = None               # async () -> active record | None   (set by each service)
+        self.refresh_seconds = float(os.getenv("TFSO_SSO_REFRESH_SECONDS", "10"))
+        self._refreshed = 0.0
+        self._lock = asyncio.Lock()
+
+    async def refresh(self, force: bool = False) -> None:
+        """Pick up SSO changes saved from the Settings page (cached for `refresh_seconds`)."""
+        from .sso import merge
+        if self.source is None or (not force and time.monotonic() - self._refreshed < self.refresh_seconds):
+            return
+        async with self._lock:
+            if not force and time.monotonic() - self._refreshed < self.refresh_seconds:
+                return
+            try:
+                cfg = merge(self.env_sso, await self.source())
+                if cfg.mode == "dev" and self.settings.is_prod:
+                    cfg = self.env_sso  # never personas in production, whatever was saved
+                self.sso = cfg
+            except Exception:  # noqa: BLE001 - keep the last good configuration
+                logging.getLogger("tfso.auth").warning("SSO settings refresh failed; keeping the current configuration")
+            self._refreshed = time.monotonic()
 
     def resolve(self, request: Request) -> Principal:
         from .identity import SERVICE, from_persona
-        mode = self.settings.auth_mode
+        mode = self.sso.mode
         if mode == "none":
             return SERVICE
         auth = request.headers.get("authorization", "")
@@ -125,35 +151,32 @@ class Authenticator:
             self._jwks[url] = jwt.PyJWKClient(url)
         return self._jwks[url]
 
-    def _validate_jwt(self, token: str) -> Principal:
-        import json as _json
-
+    def _validate_jwt(self, token: str, cfg=None) -> Principal:
+        """Validate an Entra ID access token against `cfg` (default: the effective configuration)."""
         import jwt
         from .identity import from_claims
-        s = self.settings
+        s = cfg or self.sso
         try:
             unverified = jwt.decode(token, options={"verify_signature": False})
         except Exception as exc:  # noqa: BLE001
             raise ApiError(401, "Unauthorized", f"Malformed token: {exc}") from exc
         iss = unverified.get("iss", "")
-        workforce = f"https://login.microsoftonline.com/{s.entra_tenant_id}/v2.0"
-        if iss == workforce:
-            jwks = f"https://login.microsoftonline.com/{s.entra_tenant_id}/discovery/v2.0/keys"
-        elif s.entra_external_issuer and iss == s.entra_external_issuer:
-            jwks = s.entra_external_jwks or iss.replace("/v2.0", "/discovery/v2.0/keys")
+        if s.tenantId and iss == s.issuer:
+            jwks = f"https://login.microsoftonline.com/{s.tenantId}/discovery/v2.0/keys"
+        elif s.externalIssuer and iss == s.externalIssuer:
+            jwks = s.externalJwks or iss.replace("/v2.0", "/discovery/v2.0/keys")
         else:
             raise ApiError(401, "Unauthorized", f"Untrusted token issuer {iss}")
-        # Comma-separated: workforce API and (optionally) the External ID API; v2 tokens carry the bare GUID.
-        listed = [a.strip() for a in (s.entra_audience or "").split(",") if a.strip()]
-        audiences = sorted({x for a in listed for x in (a, a.replace("api://", ""))})
+        audiences = s.audiences  # workforce API and (optionally) the External ID API; v2 tokens carry the bare GUID
+        if not audiences:
+            raise ApiError(401, "Unauthorized", "Single sign-on has no API audience configured")
         try:
             key = self._jwks_client(jwks).get_signing_key_from_jwt(token).key
             claims = jwt.decode(token, key, algorithms=["RS256"], audience=audiences, issuer=iss)
         except Exception as exc:  # noqa: BLE001
             raise ApiError(401, "Unauthorized", f"Invalid token: {exc}") from exc
-        group_map = _json.loads(s.group_role_map) if s.group_role_map else None
-        return from_claims(claims, external_issuer=s.entra_external_issuer, customer_claim=s.claim_customer,
-                           vendor_claim=s.claim_vendor, regions_claim=s.claim_regions, group_role_map=group_map)
+        return from_claims(claims, external_issuer=s.externalIssuer, customer_claim=s.claimCustomer,
+                           vendor_claim=s.claimVendor, regions_claim=s.claimRegions, group_role_map=s.groupRoleMap)
 
 
 def current_user(request: Request) -> Principal:
@@ -185,6 +208,7 @@ def create_app(settings: Settings, title: str, description: str, version: str = 
         start = time.perf_counter()
         try:
             if request.method != "OPTIONS" and not request.url.path.startswith(PUBLIC_PATHS):
+                await app.state.auth.refresh()
                 try:
                     request.state.principal = app.state.auth.check(request)
                 except ApiError as e:

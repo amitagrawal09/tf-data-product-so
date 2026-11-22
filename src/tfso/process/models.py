@@ -149,3 +149,12 @@ class DataExportRow(ProcessBase):
 
 
 OutboxMessage, InboxMessage = make_models(ProcessBase)
+
+
+class SsoSettingsRow(ProcessBase):
+    """Single sign-on configuration saved from the console (slots: `draft`, `active`). Identifiers only, no secrets."""
+    __tablename__ = "sso_settings"
+    slot: Mapped[str] = mapped_column(String(20), primary_key=True)
+    doc: Mapped[dict] = mapped_column(JsonDoc)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_by: Mapped[str | None] = mapped_column(String(200), nullable=True)

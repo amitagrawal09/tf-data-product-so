@@ -109,6 +109,8 @@ def create_experience_app(settings: Settings | None = None) -> FastAPI:
 
     app.router.dependencies.append(Depends(authorize))
     app.include_router(build_router(process, system))
+    from .sso_admin import build_sso_router
+    app.include_router(build_sso_router(app, process))
 
     def enforce_customer(request: Request, customer_id: str | None) -> None:
         """Row-level security for external customers: only their own customer accounts."""
@@ -130,7 +132,7 @@ def create_experience_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/auth/v1/personas", tags=["identity"], summary="Development sign-in personas (dev mode only)")
     async def personas():
-        if settings.auth_mode != "dev":
+        if app.state.auth.sso.mode != "dev":
             raise ApiError(404, "Not Found", "Personas are only available in development sign-in mode")
         return {"items": PERSONAS}
 
@@ -147,7 +149,7 @@ def create_experience_app(settings: Settings | None = None) -> FastAPI:
                 row["domains"][d["domainId"]] = (r["role"] in ("DataMart.Admin", d["role"]))
             matrix.append(row)
         return {"domains": [{"domainId": d["domainId"], "name": d["name"]} for d in DOMAINS], "roles": matrix,
-                "personas": PERSONAS if settings.auth_mode == "dev" else []}
+                "personas": PERSONAS if app.state.auth.sso.mode == "dev" else []}
 
     async def intake(body: dict[str, Any], idem: str | None) -> dict[str, Any]:
         headers = {"Idempotency-Key": idem} if idem else None

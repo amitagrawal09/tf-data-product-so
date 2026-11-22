@@ -3,6 +3,7 @@ import { html, setHTML, $, toast } from "../ui.js";
 import { refreshEnvChip, subtitle } from "../app.js";
 import { authConfig, signOut } from "../auth.js";
 import { me } from "../session.js";
+import * as sso from "./ssoSettings.js";
 
 export async function mount(el) {
   const s = loadSettings();
@@ -36,8 +37,11 @@ export async function mount(el) {
           <dt>Scopes</dt><dd class="mono">${a.scopes.join(" ")}</dd>
           <dt>Redirect URI</dt><dd class="mono">${a.redirectUri}</dd>` : ""}
       </dl>
-      <p class="small muted section-gap">Sign-in settings come from <span class="mono">config.js</span> (<span class="mono">auth</span> block) and cannot be overridden in the browser.</p></div>`);
+      <p class="small muted section-gap">${(me() || {}).isAdmin ? "Administrators connect Microsoft Entra ID below." : "Single sign-on is configured by a Data Mart administrator."} Sign-in settings cannot be overridden in the browser.</p></div>
+    ${(me() || {}).isAdmin ? html`<div class="section-gap" id="ssoHost"></div>` : ""}`);
   $("#so", el).addEventListener("click", () => signOut());
+  const ssoHost = $("#ssoHost", el);
+  if (ssoHost) sso.mount(ssoHost);
   $("#f", el).addEventListener("submit", e => {
     e.preventDefault();
     const ok = saveSettings({ apiBase: $("#apiBase", el).value.trim(), apiKey: $("#apiKey", el).value.trim(), subscriptionKey: $("#subKey", el).value.trim() });

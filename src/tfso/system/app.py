@@ -18,7 +18,7 @@ from ..common.bus import cloud_event, make_broker
 from ..common.config import Settings, get_settings
 from ..common.db import Database
 from ..common.outbox import Outbox, make_models
-from ..common.web import ApiError, correlation_id, create_app, current_user, forbid
+from ..common.web import ServiceClient, ApiError, correlation_id, create_app, current_user, forbid
 from .d365_client import D365Client
 from .erp import CrmActivity, LiveD365, SimulatedErp, SystemBase, translate_business_event
 from .lakehouse import LakehouseWriter
@@ -92,6 +92,16 @@ def create_system_app(settings: Settings | None = None) -> FastAPI:
             raise forbid("Writing to System APIs requires DataMart.Admin or a service identity")
 
     app.router.dependencies.append(Depends(authorize))
+
+    # SSO settings saved from the console live in the Process API (docs/09); refreshed every few seconds.
+    sso_client: list[ServiceClient] = []  # created on first use (the Process API may start after this service)
+
+    async def active_sso():
+        if not sso_client:
+            sso_client.append(ServiceClient(settings.process_url, settings, timeout=5))
+        return (await sso_client[0].get_json("/v1/sso/active"))["active"]
+
+    app.state.auth.source = active_sso
 
     # ------------------------------------------------------------------ enterprise data mart seed (illustrative)
     mart = _json.loads(resources.files("tfso.system").joinpath("seed/mart.json").read_text())["datasets"]

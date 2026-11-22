@@ -26,7 +26,7 @@ from ..common.web import ApiError, create_app, current_user, forbid
 from . import views
 from .masterdata import MasterDataClient
 from .models import (DataAccessRequestRow, DataExportRow, InboxMessage, OutboxMessage, ProcessBase,
-                     SubscriptionRow)
+                     SsoSettingsRow, SubscriptionRow)
 from .service import OrderService
 
 log = logging.getLogger("tfso.process")
@@ -154,7 +154,7 @@ def create_process_app(settings: Settings | None = None) -> FastAPI:
         path = request.url.path
         if user.is_external:
             raise forbid("The Order Status API is for internal users; customers use their own order views")
-        if path.startswith("/v1/bus/") or path.startswith("/v1/governance/") or path == "/v1/orders/intake" \
+        if path.startswith(("/v1/bus/", "/v1/governance/", "/v1/sso")) or path == "/v1/orders/intake" \
                 or path == "/v1/events":
             raise forbid("This endpoint is service-to-service only")
         if request.method in ("GET", "HEAD", "OPTIONS"):
@@ -164,6 +164,50 @@ def create_process_app(settings: Settings | None = None) -> FastAPI:
             raise forbid("Changing orders requires the Orders.Operate role")
 
     app.router.dependencies.append(Depends(authorize))
+
+    # ------------------------------------------------------------------ single sign-on settings store (docs/09)
+    def sso_doc(slot: str) -> dict | None:
+        with db.session() as s:
+            row = s.get(SsoSettingsRow, slot)
+            return dict(row.doc) if row else None
+
+    async def active_record():
+        return sso_doc("active")
+
+    app.state.auth.source = active_record
+
+    @app.get("/v1/sso", tags=["governance"], summary="SSO settings: draft and active records (service only)")
+    async def sso_get():
+        return {"draft": sso_doc("draft"), "active": sso_doc("active")}
+
+    @app.get("/v1/sso/active", tags=["governance"], summary="The active SSO record the services enforce (service only)")
+    async def sso_active():
+        return {"active": sso_doc("active")}
+
+    @app.put("/v1/sso/{slot}", tags=["governance"], summary="Save the draft or active SSO record (service only)")
+    async def sso_put(slot: str, body: dict = Body(...)):
+        if slot not in ("draft", "active"):
+            raise ApiError(404, "Not Found", slot)
+        doc = {**body, "updatedAt": iso(utcnow())}
+        with db.session() as s:
+            row = s.get(SsoSettingsRow, slot)
+            if row:
+                row.doc, row.updated_at, row.updated_by = doc, utcnow(), body.get("updatedBy")
+            else:
+                s.add(SsoSettingsRow(slot=slot, doc=doc, updated_by=body.get("updatedBy")))
+        if slot == "active":
+            await app.state.auth.refresh(force=True)
+        return doc
+
+    @app.delete("/v1/sso/{slot}", tags=["governance"], status_code=204,
+                summary="Remove a record; deleting `active` falls back to the deployment settings (break-glass)")
+    async def sso_delete(slot: str):
+        with db.session() as s:
+            row = s.get(SsoSettingsRow, slot)
+            if row:
+                s.delete(row)
+        await app.state.auth.refresh(force=True)
+        return Response(status_code=204)
 
     def scoped(request: Request, region: str | None) -> str | None:
         """Row-level security: a user with region scope only ever sees those regions."""

@@ -13,6 +13,8 @@
     .\deploy.ps1 docker        docker compose (Postgres + 4 containers) + smoke test
     .\deploy.ps1 docker-down   stop the compose stack
     .\deploy.ps1 azure         runs deploy.sh azure through WSL or Git Bash (the Azure flow is bash-only)
+    .\deploy.ps1 sso-reset     break-glass: discard single sign-on settings saved in the console and return to
+                               the deployment's sign-in settings (add "azure" to reset an Azure environment)
 
   If script execution is blocked, run once per session:
     Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
@@ -237,6 +239,17 @@ switch ($Command.ToLower()) {
     Wait-Health 8080 "gateway" 180; Ensure-Python; Invoke-Smoke "http://localhost:8080/api"
   }
   "docker-down" { docker compose down @Rest }
+  "sso-reset"   {
+    if ($Rest -and $Rest[0] -eq "azure") { Invoke-Bash "sso-reset" }
+    else {
+      $gw = ($Services | Where-Object { $_.Name -eq 'gateway' }).Port
+      Step "Resetting single sign-on to the deployment settings (local)"
+      try {
+        Invoke-WebRequest -UseBasicParsing -Method Delete -Uri "http://localhost:$gw/api/process/v1/sso/active" -Headers @{ "x-api-key" = $ApiKey } | Out-Null
+        Ok "Single sign-on settings from the console removed; the services use the deployment settings within ~10 s"
+      } catch { Die "Reset failed - is the local stack running? $($_.Exception.Message)" }
+    }
+  }
   "azure"       { Invoke-Bash "azure" }
   "destroy"     { Invoke-Bash "destroy" }
   default       { Get-Help $PSCommandPath -Detailed | Out-String | Write-Host }

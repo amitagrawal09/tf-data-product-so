@@ -22,6 +22,7 @@ This repository implements the Sales Order data product described in the *Taylor
 | – | Product strategy (CPO view): north star, regional operating model, roadmap | [`docs/05-product-strategy.md`](docs/05-product-strategy.md) |
 | – | Binding solution blueprint (contracts, routes, env vars) | [`docs/00-solution-blueprint.md`](docs/00-solution-blueprint.md) |
 | – | Enterprise Data Mart access contract (roles, personas, domains, API) | [`docs/07-data-mart-access-contract.md`](docs/07-data-mart-access-contract.md) |
+| – | Connect Entra ID (Azure AD) from Settings, step by step | [`docs/09-connect-entra-id.md`](docs/09-connect-entra-id.md) |
 | – | Single sign-on (Entra ID, External ID, B2B) and access control guide | [`docs/08-sso-and-access-control.md`](docs/08-sso-and-access-control.md), [`scripts/entra-setup.sh`](scripts/entra-setup.sh) |
 
 ## Deploy to Azure (one click)
@@ -110,7 +111,9 @@ In Azure, production signs in with **Microsoft Entra ID**:
 - employees through the Taylor Farms tenant;
 - customers and vendors through Entra External ID or as B2B guests.
 
-Run `scripts/entra-setup.sh` once, then deploy. See [docs/08](docs/08-sso-and-access-control.md) for the setup and [docs/07](docs/07-data-mart-access-contract.md) for the roles and rules.
+**Connect Entra ID from the console:** an administrator opens **Settings → Single sign-on**, enters the tenant and two app IDs, checks the connection, does a test sign-in, then enables SSO for everyone. No redeploy is needed. Follow [docs/09-connect-entra-id.md](docs/09-connect-entra-id.md) step by step. Locked out? Run `./deploy.sh sso-reset`.
+
+Alternatively, run `scripts/entra-setup.sh` once, then deploy. See [docs/08](docs/08-sso-and-access-control.md) for the setup and [docs/07](docs/07-data-mart-access-contract.md) for the roles and rules.
 
 **Regional and national operations.** Use the **Scope** selector in the top bar to choose National (all regions), a region (West, Southwest, Central, Southeast, Northeast) or a single processing site, and **Accounts** to choose national or regional accounts. The dashboard, orders, exceptions, orders at risk and marketplace all follow that scope.
 
